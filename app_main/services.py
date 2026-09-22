@@ -18,8 +18,11 @@ def verify_telegram_init_data(init_data_raw: str) -> tuple[bool, dict | None]:
     if not init_data_raw:
         return False, None
 
-    # Handle dev/testing mock bypass if init_data_raw starts with 'mock_'
+    # Dev/test uchun soxta foydalanuvchi: mock_<id>_<ism>. Productionda o'chiq —
+    # aks holda istalgan odam istalgan Telegram ID nomidan so'rov yubora olardi.
     if init_data_raw.startswith('mock_'):
+        if not settings.ALLOW_MOCK_INIT_DATA:
+            return False, None
         parts = init_data_raw.split('_')
         tg_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 999888777
         first_name = parts[2] if len(parts) > 2 else "TestUser"
@@ -110,19 +113,79 @@ def calculate_weighted_prize() -> Prize:
 
 def check_user_spin_status(telegram_id: int) -> tuple[int, StudentLead | None, list[WinningResult]]:
     """
-    Calculates available spins for a user based on initial spin (1) + extra_spins - claimed winnings.
+    Calculates available spins for a user based on initial spin (1) + extra_spins - used spins.
     Returns (available_spins, student_lead, list_of_winnings).
+
+    PENDING yutuqlar ham spin sifatida hisoblanadi, lekin ro'yxatga
+    kirmaydi — ular hali rasmiylashtirilmagan (get_pending_winning'ga qarang).
     """
     lead = StudentLead.objects.filter(telegram_id=telegram_id).first()
     if not lead:
         return 1, None, []
 
-    winnings = list(WinningResult.objects.filter(lead=lead).order_by('-created_at'))
+    all_winnings = list(
+        WinningResult.objects.filter(lead=lead).select_related('prize').order_by('-created_at')
+    )
     allowed_total = 1 + lead.extra_spins
-    claimed_count = len(winnings)
-    available_spins = max(0, allowed_total - claimed_count)
+    available_spins = max(0, allowed_total - len(all_winnings))
+    winnings = [w for w in all_winnings if w.status != WinningResult.Status.PENDING]
 
     return available_spins, lead, winnings
+
+
+def get_pending_winning(lead: StudentLead | None) -> WinningResult | None:
+    """Aylantirilgan, lekin hali ism/telefon yuborilmagan yutuq."""
+    if not lead:
+        return None
+    return (
+        lead.winnings.filter(status=WinningResult.Status.PENDING)
+        .select_related('prize')
+        .order_by('-created_at')
+        .first()
+    )
+
+
+class NoSpinsLeft(Exception):
+    pass
+
+
+def start_spin(telegram_id: int, user_data: dict) -> tuple[WinningResult, bool]:
+    """
+    Sovg'ani serverda aniqlaydi va darhol PENDING yutuq sifatida saqlaydi.
+
+    Spin shu yerda sarflanadi — foydalanuvchi natija yoqmasa ilovani yopib
+    qayta aylantira olmaydi. Rasmiylashtirilmagan yutuq bo'lsa, yangisi
+    aylantirilmaydi, o'sha qaytariladi.
+
+    Returns (winning, created). Imkoniyat qolmagan bo'lsa NoSpinsLeft.
+    """
+    with transaction.atomic():
+        lead, _ = StudentLead.objects.select_for_update().get_or_create(
+            telegram_id=telegram_id,
+            defaults={
+                'first_name': user_data.get('first_name') or "Foydalanuvchi",
+                'last_name': user_data.get('last_name') or '',
+                'phone_number': "",
+            },
+        )
+
+        pending = get_pending_winning(lead)
+        if pending:
+            return pending, False
+
+        if 1 + lead.extra_spins - lead.winnings.count() <= 0:
+            raise NoSpinsLeft()
+
+        prize = calculate_weighted_prize()
+        winning = WinningResult.objects.create(
+            lead=lead,
+            prize=prize,
+            promo_code=generate_unique_promo_code(),
+            status=WinningResult.Status.PENDING,
+            expires_at=timezone.now() + timedelta(days=prize.valid_days),
+        )
+
+    return winning, True
 
 
 # Har nechta taklif qilingan do'st uchun +1 aylantirish beriladi

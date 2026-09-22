@@ -294,6 +294,8 @@ def winning_activate(request, pk):
 
     if winning.status == WinningResult.Status.USED:
         messages.error(request, winning.promo_code + " allaqachon ishlatilgan.")
+    elif winning.status == WinningResult.Status.PENDING:
+        messages.error(request, winning.promo_code + " hali rasmiylashtirilmagan (o'quvchi formani yubormagan).")
     elif winning.is_expired():
         winning.status = WinningResult.Status.EXPIRED
         winning.save(update_fields=['status'])

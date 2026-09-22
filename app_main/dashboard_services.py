@@ -23,6 +23,11 @@ def _sync_expired_winnings():
     ).update(status=WinningResult.Status.EXPIRED)
 
 
+def _claimed_winnings():
+    """Rasmiylashtirilgan yutuqlar — PENDING (forma yuborilmagan) spinlarsiz."""
+    return WinningResult.objects.exclude(status=WinningResult.Status.PENDING)
+
+
 def get_dashboard_stats():
     """
     Asosiy sahifadagi ko'rsatkichlar to'plamini qaytaradi.
@@ -34,7 +39,7 @@ def get_dashboard_stats():
     week_ago = now - timedelta(days=7)
 
     leads_qs = StudentLead.objects.all()
-    winnings_qs = WinningResult.objects.all()
+    winnings_qs = _claimed_winnings()
 
     status_counts = {
         row['status']: row['total']
@@ -83,7 +88,7 @@ def get_daily_chart(days=14):
         return {row['day']: row['total'] for row in rows}
 
     leads_map = _bucket(StudentLead.objects.all())
-    wins_map = _bucket(WinningResult.objects.all())
+    wins_map = _bucket(_claimed_winnings())
 
     labels, leads_data, wins_data = [], [], []
     first_day = timezone.localtime(start).date()
@@ -102,7 +107,7 @@ def get_rarity_breakdown():
     Har bir rarity bo'yicha nechta yutuq chiqqanini va ulushini qaytaradi.
     """
     rows = (
-        WinningResult.objects.values('prize__rarity')
+        _claimed_winnings().values('prize__rarity')
         .annotate(total=Count('id'))
         .order_by('-total')
     )
@@ -155,7 +160,7 @@ def get_prize_performance():
 
 def get_recent_winnings(limit=10):
     return list(
-        WinningResult.objects.select_related('lead', 'prize').order_by('-created_at')[:limit]
+        _claimed_winnings().select_related('lead', 'prize').order_by('-created_at')[:limit]
     )
 
 

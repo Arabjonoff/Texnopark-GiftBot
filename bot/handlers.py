@@ -15,6 +15,7 @@ from app_main.models import StudentLead
 from app_main.services import (
     REFERRALS_PER_SPIN,
     check_user_spin_status,
+    get_pending_winning,
     process_referral,
     referral_progress,
 )
@@ -37,7 +38,9 @@ def get_user_winnings(telegram_id: int):
     Manzil sovg'aning o'zidan olinadi (admin panelda kiritiladi), shuning
     uchun natija shablonga tayyor dict ko'rinishida qaytariladi.
     """
-    available_spins, _lead, winnings = check_user_spin_status(telegram_id)
+    available_spins, lead, winnings = check_user_spin_status(telegram_id)
+    pending = get_pending_winning(lead)
+    pending_title = pending.prize.title if pending else None
 
     rows = []
     for w in winnings:
@@ -51,7 +54,7 @@ def get_user_winnings(telegram_id: int):
             'map_link': w.prize.map_link,
         })
 
-    return available_spins, rows
+    return available_spins, rows, pending_title
 
 
 @sync_to_async(thread_sensitive=True)
@@ -168,7 +171,19 @@ async def my_prizes_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user:
         return
 
-    available_spins, rows = await get_user_winnings(user.id)
+    available_spins, rows, pending_title = await get_user_winnings(user.id)
+
+    if pending_title:
+        reply_markup, _ = _webapp_keyboard()
+        await update.message.reply_text(
+            f"🎁 Sizga **{pending_title}** tushgan, lekin hali rasmiylashtirilmagan.\n\n"
+            f"MiniApp'ni oching va ism-telefoningizni yuboring — shundan keyin "
+            f"QR-kod beriladi.",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        if not rows:
+            return
 
     if not rows:
         reply_markup, _ = _webapp_keyboard()

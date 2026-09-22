@@ -2,13 +2,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser
+from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 
-from app_main.models import Prize, StudentLead, WinningResult
+from app_main.models import StudentLead, WinningResult
 from app_main.serializers import (
     PrizeSerializer,
-    StudentLeadSerializer,
     WinningResultSerializer,
     ClaimPrizeSerializer,
     VerifyCodeSerializer,
@@ -16,42 +16,84 @@ from app_main.serializers import (
 )
 from app_main.services import (
     verify_telegram_init_data,
-    calculate_weighted_prize,
     check_user_spin_status,
-    generate_unique_promo_code,
+    get_pending_winning,
     get_spinnable_prizes,
+    start_spin,
+    NoSpinsLeft,
     REFERRALS_PER_SPIN,
 )
+
+BOT_USERNAME = "texnogiftbot"
+
+def _invalid_init_data():
+    return Response(
+        {"error": "Xavfsizlik tekshiruvidan o'tmadi (Invalid Telegram initData)"},
+        status=status.HTTP_403_FORBIDDEN
+    )
+
+
+def _authenticate(init_data_raw):
+    """Telegram initData'ni tekshiradi. Returns user_data yoki None."""
+    is_valid, user_data = verify_telegram_init_data(init_data_raw)
+    if not is_valid or not user_data or not user_data.get('id'):
+        return None
+    return user_data
+
+
+def _saved_phone_digits(lead):
+    """+998901234567 -> '901234567' (formani oldindan to'ldirish uchun)."""
+    digits = ''.join(ch for ch in (lead.phone_number or '') if ch.isdigit()) if lead else ''
+    if digits.startswith('998'):
+        digits = digits[3:]
+    return digits if len(digits) == 9 else ''
+
+
+def _user_state(tg_id):
+    """
+    MiniApp'ga kerak bo'lgan foydalanuvchi holati — validate, claim va
+    my-prize javoblarida bir xil ko'rinishda qaytadi.
+    """
+    available_spins, lead, winnings = check_user_spin_status(tg_id)
+    pending = get_pending_winning(lead)
+
+    invited_count = 0
+    referral_friends = []
+    if lead:
+        referrals = list(lead.referrals.order_by('created_at').values_list('first_name', flat=True))
+        invited_count = len(referrals)
+        # Joriy "3 talik" tsikldagi do'stlar — referal kartasidagi avatarlar uchun
+        in_cycle = invited_count % REFERRALS_PER_SPIN
+        referral_friends = referrals[invited_count - in_cycle:] if in_cycle else []
+
+    return {
+        "available_spins": available_spins,
+        "winnings": WinningResultSerializer(winnings, many=True).data,
+        "pending_prize": PrizeSerializer(pending.prize).data if pending else None,
+        "referral_link": f"https://t.me/{BOT_USERNAME}?start=ref_{tg_id}",
+        "invited_count": invited_count,
+        "referral_friends": referral_friends,
+        "referrals_per_spin": REFERRALS_PER_SPIN,
+        "saved_profile": {
+            "first_name": lead.first_name if lead and lead.phone_number else '',
+            "last_name": (lead.last_name or '') if lead and lead.phone_number else '',
+            "phone_digits": _saved_phone_digits(lead),
+        },
+    }
 
 
 class ValidateInitDataView(APIView):
     def post(self, request):
-        init_data_raw = request.data.get('init_data')
-        is_valid, user_data = verify_telegram_init_data(init_data_raw)
+        user_data = _authenticate(request.data.get('init_data'))
+        if not user_data:
+            return _invalid_init_data()
 
-        if not is_valid or not user_data:
-            return Response(
-                {"error": "Xavfsizlik tekshiruvidan o'tmadi (Invalid Telegram initData)"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        tg_id = user_data.get('id')
-        available_spins, lead, winnings = check_user_spin_status(tg_id)
-
-        winnings_data = WinningResultSerializer(winnings, many=True).data
-        invited_count = lead.referrals.count() if lead else 0
-        bot_username = "texnogiftbot"
-        referral_link = f"https://t.me/{bot_username}?start=ref_{tg_id}"
-
+        tg_id = user_data['id']
         return Response({
             "valid": True,
             "telegram_id": tg_id,
             "user_info": user_data,
-            "available_spins": available_spins,
-            "winnings": winnings_data,
-            "referral_link": referral_link,
-            "invited_count": invited_count,
-            "referrals_per_spin": REFERRALS_PER_SPIN,
+            **_user_state(tg_id),
         }, status=status.HTTP_200_OK)
 
 
@@ -64,151 +106,93 @@ class PrizeListView(APIView):
 
 
 class SpinRouletteView(APIView):
+    """
+    Sovg'ani serverda aniqlaydi va darhol PENDING yutuq sifatida saqlaydi.
+    Rasmiylashtirilmagan yutuq bo'lsa, yangi spin o'rniga o'sha qaytadi.
+    """
     def post(self, request):
-        init_data_raw = request.data.get('init_data')
-        is_valid, user_data = verify_telegram_init_data(init_data_raw)
+        user_data = _authenticate(request.data.get('init_data'))
+        if not user_data:
+            return _invalid_init_data()
 
-        if not is_valid or not user_data:
-            return Response(
-                {"error": "Xavfsizlik tekshiruvidan o'tmadi (Invalid Telegram initData)"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        tg_id = user_data.get('id')
-        available_spins, lead, winnings = check_user_spin_status(tg_id)
-
-        if available_spins <= 0:
+        try:
+            winning, created = start_spin(user_data['id'], user_data)
+        except NoSpinsLeft:
             return Response(
                 {
-                    "error": "Sizda aylantirish imkoniyati qolmagan! Do'stlaringizni taklif qilib qo'shimcha spin oling.",
+                    "error": "Sizda aylantirish imkoniyati qolmagan! Do'stlaringizni taklif qilib qo'shimcha imkoniyat oling.",
                     "available_spins": 0,
-                    "winnings": WinningResultSerializer(winnings, many=True).data
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        try:
-            won_prize = calculate_weighted_prize()
-        except Exception as e:
+        except ValueError as e:
             return Response(
-                {"error": f"Sovg'ani aniqlashda xatolik: {str(e)}"},
+                {"error": f"Sovg'ani aniqlashda xatolik: {e}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        target_index = 65
-        prize_serializer = PrizeSerializer(won_prize)
-
         return Response({
-            "prize": prize_serializer.data,
-            "target_index": target_index,
-            "message": "Yutuq backend serverda aniqlandi!"
+            "prize": PrizeSerializer(winning.prize).data,
+            "target_index": 65,
+            # False — foydalanuvchi avval aylantirgan, lekin rasmiylashtirmagan
+            "is_new_spin": created,
         }, status=status.HTTP_200_OK)
 
 
 class ClaimPrizeView(APIView):
+    """
+    PENDING yutuqni rasmiylashtiradi. Qaysi sovg'a tushgani serverda
+    saqlangan — frontend yuborgan prize_id hisobga olinmaydi.
+    """
     def post(self, request):
         serializer = ClaimPrizeSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
-        init_data_raw = data['init_data']
-        is_valid, user_data = verify_telegram_init_data(init_data_raw)
+        user_data = _authenticate(data['init_data'])
+        if not user_data:
+            return _invalid_init_data()
 
-        if not is_valid or not user_data:
-            return Response(
-                {"error": "Xavfsizlik tekshiruvidan o'tmadi (Invalid Telegram initData)"},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        tg_id = user_data['id']
 
-        tg_id = user_data.get('id')
-        available_spins, lead, winnings = check_user_spin_status(tg_id)
+        with transaction.atomic():
+            lead = StudentLead.objects.select_for_update().filter(telegram_id=tg_id).first()
+            winning = get_pending_winning(lead)
+            if not winning:
+                return Response(
+                    {"error": "Rasmiylashtiriladigan yutuq topilmadi. Avval barabanni aylantiring."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        if available_spins <= 0:
-            return Response(
-                {"error": "Aylantirish va yutuqni biriktirish imkoniyati tugagan"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            lead.first_name = data['first_name']
+            lead.last_name = data.get('last_name', '')
+            lead.phone_number = data['phone_number']
+            lead.save(update_fields=['first_name', 'last_name', 'phone_number'])
 
-        try:
-            prize = Prize.objects.get(id=data['prize_id'], is_active=True)
-        except Prize.DoesNotExist:
-            return Response(
-                {"error": "Tanlangan sovg'a topilmadi yoki faol emas"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        # Update or create StudentLead
-        student_lead, created = StudentLead.objects.update_or_create(
-            telegram_id=tg_id,
-            defaults={
-                'first_name': data['first_name'],
-                'last_name': data.get('last_name', ''),
-                'phone_number': data['phone_number'],
-            }
-        )
-
-        promo_code = generate_unique_promo_code()
-        expires_at = timezone.now() + timedelta(days=prize.valid_days)
-
-        winning = WinningResult.objects.create(
-            lead=student_lead,
-            prize=prize,
-            promo_code=promo_code,
-            status=WinningResult.Status.ACTIVE,
-            expires_at=expires_at
-        )
-
-        # Recalculate remaining spins & winnings
-        updated_spins, updated_lead, updated_winnings = check_user_spin_status(tg_id)
-        referral_link = f"https://t.me/texnogiftbot?start=ref_{tg_id}"
+            # Muddat rasmiylashtirilgan paytdan boshlab hisoblanadi
+            winning.status = WinningResult.Status.ACTIVE
+            winning.expires_at = timezone.now() + timedelta(days=winning.prize.valid_days)
+            winning.save(update_fields=['status', 'expires_at'])
 
         return Response({
             "message": "Muvaffaqiyatli saqlandi va yutuq biriktirildi!",
             "winning_result": WinningResultSerializer(winning).data,
-            "available_spins": updated_spins,
-            "winnings": WinningResultSerializer(updated_winnings, many=True).data,
-            "referral_link": referral_link,
-            "invited_count": updated_lead.referrals.count(),
-            "referrals_per_spin": REFERRALS_PER_SPIN,
+            **_user_state(tg_id),
         }, status=status.HTTP_201_CREATED)
 
 
 class MyPrizeView(APIView):
+    """
+    Foydalanuvchining o'z yutuqlari. Faqat imzolangan initData bilan —
+    promokod = sovg'a, shuning uchun telegram_id bo'yicha ochiq berilmaydi.
+    """
     def get(self, request):
-        init_data_raw = request.query_params.get('init_data')
-        tg_id_param = request.query_params.get('telegram_id')
+        user_data = _authenticate(request.query_params.get('init_data'))
+        if not user_data:
+            return _invalid_init_data()
 
-        tg_id = None
-        if init_data_raw:
-            is_valid, user_data = verify_telegram_init_data(init_data_raw)
-            if is_valid and user_data:
-                tg_id = user_data.get('id')
-
-        if not tg_id and tg_id_param:
-            try:
-                tg_id = int(tg_id_param)
-            except ValueError:
-                pass
-
-        if not tg_id:
-            return Response(
-                {"error": "Telegram ID topilmadi"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        available_spins, lead, winnings = check_user_spin_status(tg_id)
-        winnings_data = WinningResultSerializer(winnings, many=True).data
-        invited_count = lead.referrals.count() if lead else 0
-        referral_link = f"https://t.me/texnogiftbot?start=ref_{tg_id}"
-
-        return Response({
-            "available_spins": available_spins,
-            "winnings": winnings_data,
-            "referral_link": referral_link,
-            "invited_count": invited_count,
-            "referrals_per_spin": REFERRALS_PER_SPIN,
-        }, status=status.HTTP_200_OK)
+        return Response(_user_state(user_data['id']), status=status.HTTP_200_OK)
 
 
 class PublicWinnersView(APIView):
@@ -235,7 +219,11 @@ class PublicWinnersView(APIView):
             offset = 0
         offset = max(0, offset)
 
-        qs = WinningResult.objects.select_related('lead', 'prize').order_by('-created_at')
+        qs = (
+            WinningResult.objects.select_related('lead', 'prize')
+            .exclude(status=WinningResult.Status.PENDING)
+            .order_by('-created_at')
+        )
         total = qs.count()
         rows = qs[offset:offset + limit]
 
@@ -272,7 +260,8 @@ class AdminVerifyCodeView(APIView):
             promo_code__iexact=code
         ).first()
 
-        if not winning:
+        # Rasmiylashtirilmagan yutuqning promokodi foydalanuvchiga hali ko'rsatilmagan
+        if not winning or winning.status == WinningResult.Status.PENDING:
             return Response(
                 {"error": f"Promokod '{code}' bazadan topilmadi!"},
                 status=status.HTTP_404_NOT_FOUND

@@ -201,6 +201,9 @@ class StudentLead(models.Model):
 
 class WinningResult(models.Model):
     class Status(models.TextChoices):
+        # Baraban aylandi, lekin foydalanuvchi hali ism/telefonni yubormagan.
+        # Spin shu zahoti sarflanadi — ilovani yopib qayta aylantirib bo'lmaydi.
+        PENDING = 'PENDING', 'Rasmiylashtirilmagan'
         ACTIVE = 'ACTIVE', 'Aktiv'
         USED = 'USED', 'Ishlatilgan'
         EXPIRED = 'EXPIRED', 'Muddati o\'tgan'

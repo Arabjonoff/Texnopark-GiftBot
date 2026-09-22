@@ -11,6 +11,9 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-texnopark-mini-app-
 
 DEBUG = os.getenv('DEBUG', 'True').strip().lower() in ('1', 'true', 'yes', 'on')
 
+# mock_<id>_<ism> ko'rinishidagi soxta initData faqat local dev uchun
+ALLOW_MOCK_INIT_DATA = DEBUG
+
 _allowed = os.getenv('ALLOWED_HOSTS', '').strip()
 ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()] or ['*']
 

@@ -69,7 +69,9 @@ class WinningResultSerializer(serializers.ModelSerializer):
 
 class ClaimPrizeSerializer(serializers.Serializer):
     init_data = serializers.CharField(required=True)
-    prize_id = serializers.IntegerField(required=True)
+    # Eski (keshdagi) klientlar uchun qabul qilinadi, lekin hisobga olinmaydi —
+    # qaysi sovg'a tushgani serverda saqlanadi
+    prize_id = serializers.IntegerField(required=False)
     first_name = serializers.CharField(max_length=100, required=True)
     last_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
     phone_number = serializers.CharField(max_length=20, required=True)
