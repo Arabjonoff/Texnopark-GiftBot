@@ -5,92 +5,119 @@
  *   1. spin    — baraban
  *   2. history — foydalanuvchining o'z yutuqlari va QR-kodlari
  *   3. winners — shu botda yutuq olganlarning umumiy ro'yxati
+ *
+ * Spin oqimi: /api/spin/ sovg'ani serverda aniqlaydi va darhol PENDING
+ * yutuq sifatida saqlaydi -> g'alaba oynasi -> forma -> /api/claim-prize/.
+ * Forma yuborilmasa, keyingi ochilishda o'sha sovg'a qayta taklif qilinadi.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Telegram WebApp SDK Initialization
   const tg = window.Telegram?.WebApp;
+  const BG_COLOR = '#0b0f19';
+
+  const tgAtLeast = (v) => !!(tg && tg.isVersionAtLeast && tg.isVersionAtLeast(v));
+
   if (tg) {
     tg.ready();
     tg.expand();
+    // Telegram sarlavhasi va foni ilova rangiga mos bo'lsin
+    if (tgAtLeast('6.1')) {
+      try { tg.setHeaderColor(BG_COLOR); tg.setBackgroundColor(BG_COLOR); } catch (e) { /* eski klient */ }
+    }
+    if (tgAtLeast('7.10')) {
+      try { tg.setBottomBarColor(BG_COLOR); } catch (e) { /* eski klient */ }
+    }
+    // Ro'yxatni pastga surganda ilova tasodifan yopilib qolmasin
+    if (tgAtLeast('7.7')) {
+      try { tg.disableVerticalSwipes(); } catch (e) { /* eski klient */ }
+    }
   }
 
-  // Get raw initData or dev mock fallback
-  const getInitData = () => {
-    if (tg && tg.initData && tg.initData.trim() !== '') {
-      return tg.initData;
-    }
-    return 'mock_123456789_Oquvchi';
-  };
+  const inTelegram = !!(tg && tg.initData && tg.initData.trim() !== '');
+  const isLocalDev = ['localhost', '127.0.0.1'].includes(location.hostname);
 
-  const initDataRaw = getInitData();
+  // Local dev'da server mock_ initData'ni qabul qiladi (DEBUG=True)
+  const initDataRaw = inTelegram ? tg.initData : (isLocalDev ? 'mock_123456789_Oquvchi' : '');
 
   // ---------------------------------------------------------------- DOM
 
-  const spinBtn = document.getElementById('spin-btn');
-  const spinBtnText = document.getElementById('spin-btn-text');
-  const soundToggleBtn = document.getElementById('sound-toggle');
-  const headerSubtitle = document.getElementById('header-subtitle');
+  const $ = (id) => document.getElementById(id);
 
-  // Grand Victory Modal Elements
-  const victoryModal = document.getElementById('victory-modal');
-  const victoryPrizeBox = document.getElementById('victory-prize-box');
-  const victoryPrizeImg = document.getElementById('victory-prize-img');
-  const victoryPrizeTitle = document.getElementById('victory-prize-title');
-  const btnClaimVictory = document.getElementById('btn-claim-victory');
+  const spinBtn = $('spin-btn');
+  const spinBtnText = $('spin-btn-text');
+  const spinBtnIcon = $('spin-btn-icon');
+  const soundToggleBtn = $('sound-toggle');
+  const headerSubtitle = $('header-subtitle');
+  const outsideTelegram = $('outside-telegram');
+  const spinsCountBadge = $('spins-count-badge');
 
-  // Lead Form Modal Elements
-  const leadModal = document.getElementById('lead-modal');
-  const leadForm = document.getElementById('lead-form');
-  const inputFirstName = document.getElementById('input-first-name');
-  const inputLastName = document.getElementById('input-last-name');
-  const inputPhone = document.getElementById('input-phone');
+  const victoryModal = $('victory-modal');
+  const victoryKicker = $('victory-kicker');
+  const victoryPrizeBox = $('victory-prize-box');
+  const victoryRarity = $('victory-rarity');
+  const victoryPrizeEmoji = $('victory-prize-emoji');
+  const victoryPrizeImg = $('victory-prize-img');
+  const victoryPrizeTitle = $('victory-prize-title');
+  const btnClaimVictory = $('btn-claim-victory');
 
-  // Referral Elements
-  const refLinkInput = document.getElementById('ref-link-input');
-  const btnCopyRef = document.getElementById('btn-copy-ref');
-  const btnShareTg = document.getElementById('btn-share-tg');
-  const invitedCountBadge = document.getElementById('invited-count-badge');
-  const spinsCountBadge = document.getElementById('spins-count-badge');
-  const refProgressText = document.getElementById('ref-progress-text');
-  const refProgressFill = document.getElementById('ref-progress-fill');
+  const leadModal = $('lead-modal');
+  const leadForm = $('lead-form');
+  const savedProfileBox = $('saved-profile');
+  const savedName = $('saved-name');
+  const savedPhone = $('saved-phone');
+  const btnEditProfile = $('btn-edit-profile');
+  const profileFields = $('profile-fields');
+  const inputFirstName = $('input-first-name');
+  const inputLastName = $('input-last-name');
+  const inputPhone = $('input-phone');
+  const phoneError = $('phone-error');
+  const btnSubmitLead = $('btn-submit-lead');
 
-  // Tab 2 — Yutuqlar tarixi
-  const historyList = document.getElementById('history-list');
-  const historyEmpty = document.getElementById('history-empty');
-  const historyLoading = document.getElementById('history-loading');
-  const historyBadge = document.getElementById('history-badge');
+  const referralCard = $('referral-card');
+  const referralHint = $('referral-hint');
+  const friendSlots = $('friend-slots');
+  const refLinkInput = $('ref-link-input');
+  const btnCopyRef = $('btn-copy-ref');
+  const btnShareTg = $('btn-share-tg');
+  const invitedCountBadge = $('invited-count-badge');
 
-  // Tab 3 — G'oliblar
-  const winnersList = document.getElementById('winners-list');
-  const winnersLoading = document.getElementById('winners-loading');
-  const winnersEmpty = document.getElementById('winners-empty');
-  const winnersError = document.getElementById('winners-error');
-  const winnersTotal = document.getElementById('winners-total');
-  const winnersTotalCount = document.getElementById('winners-total-count');
-  const btnLoadMoreWinners = document.getElementById('btn-load-more-winners');
-  const btnRetryWinners = document.getElementById('btn-retry-winners');
+  const historyList = $('history-list');
+  const historyEmpty = $('history-empty');
+  const historyLoading = $('history-loading');
+  const historyBadge = $('history-badge');
 
-  // QR Viewer Modal Elements
-  const qrViewModal = document.getElementById('qr-view-modal');
-  const qrModalTitle = document.getElementById('qr-modal-title');
-  const qrModalQrcode = document.getElementById('qr-modal-qrcode');
-  const qrModalPromocode = document.getElementById('qr-modal-promocode');
-  const btnCloseQrModal = document.getElementById('btn-close-qr-modal');
-  const qrLocation = document.getElementById('qr-location');
-  const qrLocationAddress = document.getElementById('qr-location-address');
-  const btnOpenMap = document.getElementById('btn-open-map');
+  const winnersList = $('winners-list');
+  const winnersLoading = $('winners-loading');
+  const winnersEmpty = $('winners-empty');
+  const winnersError = $('winners-error');
+  const winnersTotal = $('winners-total');
+  const winnersTotalCount = $('winners-total-count');
+  const btnLoadMoreWinners = $('btn-load-more-winners');
+  const btnRetryWinners = $('btn-retry-winners');
 
-  // Instantiate Roulette Engine
+  const qrViewModal = $('qr-view-modal');
+  const qrModalTitle = $('qr-modal-title');
+  const qrModalQrcode = $('qr-modal-qrcode');
+  const qrModalPromocode = $('qr-modal-promocode');
+  const btnCloseQrModal = $('btn-close-qr-modal');
+  const qrLocation = $('qr-location');
+  const qrLocationAddress = $('qr-location-address');
+  const btnOpenMap = $('btn-open-map');
+
   const rouletteEngine = new RouletteEngine('roulette-track', 'roulette-viewport');
 
+  // ---------------------------------------------------------------- Holat
+
   let activePrizes = [];
-  let currentWonPrize = null;
+  let currentWonPrize = null;   // g'alaba oynasida ko'rsatilgan (PENDING) sovg'a
   let userAvailableSpins = 0;
   let userReferralLink = '';
-  let myWinnings = [];
+  let savedProfile = null;      // avval kiritilgan ism/telefon
+  let telegramUser = null;
+  let lastFriendCount = null;
+  let spinsThisSession = 0;
+  let submittingLead = false;
 
-  // G'oliblar ro'yxati sahifalash holati
   const WINNERS_PAGE_SIZE = 30;
   let winnersOffset = 0;
   let winnersLoaded = false;
@@ -98,29 +125,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---------------------------------------------------------------- Yordamchilar
 
-  const RARITY_ICONS = {
-    LEGENDARY: '🏆',
-    EPIC: '💎',
-    RARE: '🎁',
-    COMMON: '⭐'
-  };
-
-  function rarityIcon(rarity) {
-    return RARITY_ICONS[rarity] || '⭐';
-  }
-
-  /** XSS oldini olish uchun — innerHTML ga tushadigan har qanday matn shu yerdan o'tadi */
-  function escapeHTML(value) {
-    return String(value == null ? '' : value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
   function show(el) { if (el) el.classList.remove('hidden'); }
   function hide(el) { if (el) el.classList.add('hidden'); }
+
+  function icon(name) {
+    return `<svg class="icon"><use href="#i-${name}"/></svg>`;
+  }
 
   function formatDateTime(iso) {
     if (!iso) return '';
@@ -150,14 +160,117 @@ document.addEventListener('DOMContentLoaded', () => {
     return formatDateTime(iso).split(' ')[0];
   }
 
+  function formatPhoneDigits(digits) {
+    const parts = [digits.slice(0, 2), digits.slice(2, 5), digits.slice(5, 7), digits.slice(7, 9)];
+    return parts.filter(Boolean).join(' ');
+  }
+
+  // Telegram titrash javobi — brauzerda va eski klientlarda jim o'tadi
+  const hf = inTelegram && tgAtLeast('6.1') ? tg.HapticFeedback : null;
+  const haptic = {
+    impact(style = 'light') { try { hf?.impactOccurred(style); } catch (e) { /* */ } },
+    notify(type) { try { hf?.notificationOccurred(type); } catch (e) { /* */ } },
+    select() { try { hf?.selectionChanged(); } catch (e) { /* */ } },
+  };
+
+  // ---------------------------------------------------------------- Toast (alert() o'rniga)
+
+  const toastStack = $('toast-stack');
+  const TOAST_ICONS = { error: 'alert', success: 'check', info: 'gift' };
+
+  function toast(message, type = 'error', ms = 3200) {
+    if (!toastStack) return;
+    if (type === 'error') haptic.notify('error');
+
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    el.innerHTML = `${icon(TOAST_ICONS[type] || 'alert')}<span></span>`;
+    el.querySelector('span').textContent = message;
+    toastStack.appendChild(el);
+
+    // Bir vaqtda 3 tadan ortiq ko'rinmasin
+    while (toastStack.children.length > 3) toastStack.firstElementChild.remove();
+
+    setTimeout(() => {
+      el.classList.add('leaving');
+      setTimeout(() => el.remove(), 260);
+    }, ms);
+  }
+
+  // ---------------------------------------------------------------- Modallar + Telegram BackButton
+
+  const modalStack = [];
+
+  function onBackButton() {
+    const top = modalStack[modalStack.length - 1];
+    if (top) closeModal(top);
+  }
+
+  function syncBackButton() {
+    if (!tg || !tg.BackButton || !tgAtLeast('6.1')) return;
+    modalStack.length ? tg.BackButton.show() : tg.BackButton.hide();
+  }
+
+  if (tg && tg.BackButton && tgAtLeast('6.1')) {
+    tg.BackButton.onClick(onBackButton);
+  }
+
+  function openModal(el) {
+    if (!el || modalStack.includes(el)) return;
+    modalStack.push(el);
+    el.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    syncBackButton();
+    if (el === leadModal) showMainButton();
+  }
+
+  function closeModal(el) {
+    const idx = modalStack.indexOf(el);
+    if (idx !== -1) modalStack.splice(idx, 1);
+    el.classList.remove('active');
+    if (!modalStack.length) document.body.style.overflow = '';
+    syncBackButton();
+    if (el === leadModal) hideMainButton();
+  }
+
+  // Pastdan chiqadigan oynalar fonini bosganda yopiladi
+  [leadModal, qrViewModal].forEach((overlay) => {
+    overlay?.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal(overlay);
+    });
+  });
+
+  // ---------------------------------------------------------------- Telegram MainButton (forma uchun)
+
+  const mainButton = inTelegram && tg.MainButton ? tg.MainButton : null;
+  if (mainButton) document.body.classList.add('tg-main-button');
+
+  function showMainButton() {
+    if (!mainButton) return;
+    mainButton.setParams({
+      text: 'Yutuqni saqlash',
+      color: '#7c6cf6',
+      text_color: '#ffffff',
+      is_active: true,
+      is_visible: true,
+    });
+    mainButton.onClick(submitLead);
+  }
+
+  function hideMainButton() {
+    if (!mainButton) return;
+    mainButton.offClick(submitLead);
+    mainButton.hideProgress();
+    mainButton.hide();
+  }
+
   // ---------------------------------------------------------------- Tab almashish
 
-  // Baraban bo'limining matni HTML'dan olinadi — shunda sarlavhani
-  // faqat index.html ichida o'zgartirish yetarli bo'ladi.
   const TAB_SUBTITLES = {
     spin: headerSubtitle ? headerSubtitle.innerText.trim() : '',
-    history: 'Sizning yutuqlaringiz',
-    winners: 'Yutuq olganlar ro\'yxati'
+    history: 'Yutuqlarim',
+    winners: "G'oliblar"
   };
 
   const tabButtons = document.querySelectorAll('.appbar-item');
@@ -186,277 +299,418 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   tabButtons.forEach((btn) => {
-    btn.addEventListener('click', () => switchTab(btn.dataset.view));
+    btn.addEventListener('click', () => {
+      if (!btn.classList.contains('active')) haptic.select();
+      switchTab(btn.dataset.view);
+    });
   });
 
-  // Bo'sh holatdagi "Barabanga o'tish" tugmalari
   document.querySelectorAll('[data-goto]').forEach((btn) => {
     btn.addEventListener('click', () => switchTab(btn.dataset.goto));
   });
 
   // ---------------------------------------------------------------- Ovoz
 
-  if (soundToggleBtn) {
-    soundToggleBtn.addEventListener('click', () => {
-      rouletteEngine.soundEnabled = !rouletteEngine.soundEnabled;
-      if (rouletteEngine.soundEnabled) {
-        soundToggleBtn.classList.add('active');
-        soundToggleBtn.innerHTML = '🔊';
-      } else {
-        soundToggleBtn.classList.remove('active');
-        soundToggleBtn.innerHTML = '🔇';
-      }
-    });
+  soundToggleBtn?.addEventListener('click', () => {
+    rouletteEngine.soundEnabled = !rouletteEngine.soundEnabled;
+    soundToggleBtn.classList.toggle('is-on', rouletteEngine.soundEnabled);
+    soundToggleBtn.setAttribute('aria-label', rouletteEngine.soundEnabled ? "Ovozni o'chirish" : 'Ovozni yoqish');
+    haptic.select();
+  });
+
+  // ---------------------------------------------------------------- Server holati
+
+  /** validate-init / claim / my-prize javoblaridagi umumiy holatni UI'ga qo'llaydi */
+  function applyUserState(data) {
+    userAvailableSpins = data.available_spins || 0;
+    userReferralLink = data.referral_link || userReferralLink || 'https://t.me/texnogiftbot';
+    currentWonPrize = data.pending_prize || null;
+    savedProfile = data.saved_profile || savedProfile;
+
+    if (spinsCountBadge) spinsCountBadge.innerText = userAvailableSpins;
+    updateSpinButton();
+    updateReferralHub(data);
+    renderHistory(data.winnings || []);
   }
 
-  // ---------------------------------------------------------------- Boshlang'ich holat
+  async function loadUserState() {
+    const resp = await fetch('/api/validate-init/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ init_data: initDataRaw })
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    telegramUser = data.user_info || telegramUser;
+    applyUserState(data);
+    return data;
+  }
 
-  async function checkInitialUserStatus() {
+  async function init() {
+    loadPrizes();
+
+    if (!initDataRaw) {
+      showOutsideTelegram();
+      return;
+    }
+
     show(historyLoading);
     hide(historyEmpty);
 
     try {
-      const resp = await fetch('/api/validate-init/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ init_data: initDataRaw })
-      });
-      const data = await resp.json();
-
-      if (resp.ok) {
-        userAvailableSpins = data.available_spins || 0;
-        userReferralLink = data.referral_link || 'https://t.me/texnogiftbot';
-
-        updateSpinButtonUI();
-        updateReferralHub(userReferralLink, data.invited_count || 0, userAvailableSpins, data.referrals_per_spin);
-        renderHistory(data.winnings || []);
-
-        if (data.user_info) {
-          if (data.user_info.first_name) inputFirstName.value = data.user_info.first_name;
-          if (data.user_info.last_name) inputLastName.value = data.user_info.last_name;
-        }
-      } else {
-        renderHistory([]);
+      const data = await loadUserState();
+      // Oldingi safar aylantirilgan, lekin rasmiylashtirilmagan sovg'a
+      if (data.pending_prize) {
+        setTimeout(() => openVictoryModal(data.pending_prize, { resumed: true }), 400);
       }
-
-      await loadPrizes();
-
     } catch (err) {
       console.error('Initial check error:', err);
       renderHistory([]);
-      await loadPrizes();
+      setSpinButton('retry');
+      toast("Server bilan bog'lanib bo'lmadi. Qayta urinib ko'ring.");
     } finally {
       hide(historyLoading);
     }
   }
 
+  function showOutsideTelegram() {
+    show(outsideTelegram);
+    hide(spinBtn);
+    hide(referralCard);
+    if (spinsCountBadge) spinsCountBadge.innerText = '–';
+    renderHistory([]);
+  }
+
   async function loadPrizes() {
     try {
       const resp = await fetch('/api/prizes/');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       activePrizes = await resp.json();
 
-      if (activePrizes && activePrizes.length > 0) {
+      if (activePrizes.length > 0) {
         rouletteEngine.populateTrack(activePrizes);
+      } else {
+        toast("Hozircha barabanda sovg'alar yo'q", 'info');
       }
     } catch (err) {
       console.error('Failed to load prizes:', err);
     }
   }
 
-  function updateSpinButtonUI() {
-    if (userAvailableSpins > 0) {
-      spinBtn.disabled = false;
-      spinBtnText.innerText = `🔑 Keysni Ochish (Imkoniyat: ${userAvailableSpins})`;
-    } else {
-      spinBtn.disabled = true;
-      spinBtnText.innerText = `🔒 Imkoniyat Qolmagan (Do'stlarni Taklif Qiling)`;
+  // Foydalanuvchi do'stiga havola yuborib qaytganda progress yangilansin
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && initDataRaw && !rouletteEngine.isSpinning && !modalStack.length) {
+      loadUserState().catch(() => { /* jim — keyingi safar yangilanadi */ });
     }
+  });
+
+  // ---------------------------------------------------------------- Asosiy tugma
+
+  const SPIN_MODES = {
+    loading: { text: 'Yuklanmoqda…', icon: 'gift', disabled: true },
+    spinning: { text: 'Aylanmoqda…', icon: 'gift', disabled: true },
+    spin: { text: "Sovg'ani ochish", icon: 'gift', pulse: true },
+    claim: { text: 'Yutuqni rasmiylashtirish', icon: 'check', pulse: true },
+    invite: { text: "Do'stlarni taklif qilish", icon: 'users', secondary: true },
+    retry: { text: 'Qayta urinish', icon: 'refresh' },
+  };
+
+  let spinMode = 'loading';
+
+  function setSpinButton(mode) {
+    const cfg = SPIN_MODES[mode];
+    spinMode = mode;
+    spinBtn.disabled = !!cfg.disabled;
+    spinBtn.classList.toggle('is-pulsing', !!cfg.pulse);
+    spinBtn.classList.toggle('btn-primary', !cfg.secondary);
+    spinBtn.classList.toggle('btn-secondary', !!cfg.secondary);
+    spinBtnText.innerText = mode === 'spin' && userAvailableSpins > 1
+      ? `${cfg.text} · ${userAvailableSpins}`
+      : cfg.text;
+    spinBtnIcon.innerHTML = `<use href="#i-${cfg.icon}"/>`;
   }
 
-  function updateReferralHub(refLink, invitedCount, spinsCount, perSpin) {
-    if (refLinkInput) refLinkInput.value = refLink;
-    if (invitedCountBadge) invitedCountBadge.innerText = invitedCount;
-    if (spinsCountBadge) spinsCountBadge.innerText = spinsCount;
-
-    // Har perSpin ta do'st = +1 aylantirish; progress keyingi bonusgacha
-    const step = perSpin || 3;
-    const progress = invitedCount % step;
-    if (refProgressText) refProgressText.innerText = `${progress}/${step}`;
-    if (refProgressFill) refProgressFill.style.width = `${(progress / step) * 100}%`;
+  function updateSpinButton() {
+    if (rouletteEngine.isSpinning) return;
+    if (currentWonPrize) setSpinButton('claim');
+    else if (userAvailableSpins > 0) setSpinButton('spin');
+    else setSpinButton('invite');
   }
 
-  // ---------------------------------------------------------------- Spin
+  spinBtn.addEventListener('click', () => {
+    switch (spinMode) {
+      case 'spin': return startSpin();
+      case 'claim': return openVictoryModal(currentWonPrize, { resumed: true });
+      case 'invite': return shareReferral();
+      case 'retry':
+        setSpinButton('loading');
+        return init();
+    }
+  });
 
-  if (spinBtn) {
-    spinBtn.addEventListener('click', async () => {
-      if (rouletteEngine.isSpinning) return;
-      if (userAvailableSpins <= 0) {
-        alert("Sizda aylantirish imkoniyati qolmagan! Do'stlaringizni taklif qiling.");
+  async function startSpin() {
+    if (rouletteEngine.isSpinning) return;
+    if (!activePrizes.length) {
+      toast("Sovg'alar hali yuklanmadi, bir oz kuting", 'info');
+      loadPrizes();
+      return;
+    }
+
+    haptic.impact('medium');
+    setSpinButton('spinning');
+
+    let data;
+    try {
+      const resp = await fetch('/api/spin/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ init_data: initDataRaw })
+      });
+      data = await resp.json();
+
+      if (!resp.ok) {
+        if (resp.status === 400 && data.available_spins === 0) userAvailableSpins = 0;
+        toast(data.error || 'Xatolik yuz berdi');
+        updateSpinButton();
         return;
       }
+    } catch (err) {
+      console.error('Spin error:', err);
+      toast("Server bilan bog'lanishda xatolik");
+      updateSpinButton();
+      return;
+    }
 
-      spinBtn.disabled = true;
-      spinBtnText.innerText = `Aylantirilmoqda...`;
+    // Spin serverda sarflandi — oyna yopilsa ham sovg'a saqlanib qoladi
+    currentWonPrize = data.prize;
 
-      try {
-        const resp = await fetch('/api/spin/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ init_data: initDataRaw })
-        });
-        const data = await resp.json();
+    if (!data.is_new_spin) {
+      // Avval aylantirilgan, rasmiylashtirilmagan sovg'a — animatsiyasiz ko'rsatamiz
+      updateSpinButton();
+      openVictoryModal(currentWonPrize, { resumed: true });
+      return;
+    }
 
-        if (!resp.ok) {
-          alert(data.error || 'Xatolik yuz berdi');
-          updateSpinButtonUI();
-          return;
-        }
+    userAvailableSpins = Math.max(0, userAvailableSpins - 1);
+    if (spinsCountBadge) spinsCountBadge.innerText = userAvailableSpins;
 
-        currentWonPrize = data.prize;
-        const targetIndex = data.target_index || 65;
+    // Birinchi aylantirish to'liq, keyingilari qisqaroq
+    const duration = spinsThisSession === 0 ? 5000 : 3500;
+    spinsThisSession += 1;
 
-        // 5s deceleration animation
-        rouletteEngine.spin(activePrizes, currentWonPrize, targetIndex, (wonPrize) => {
-          openVictoryModal(wonPrize);
-        });
-
-      } catch (err) {
-        console.error('Spin error:', err);
-        alert("Server bilan bog'lanishda xatolik");
-        updateSpinButtonUI();
-      }
-    });
+    rouletteEngine.spin(activePrizes, currentWonPrize, data.target_index || 65, (wonPrize) => {
+      haptic.notify('success');
+      updateSpinButton();
+      openVictoryModal(wonPrize);
+    }, duration);
   }
 
-  // ---------------------------------------------------------------- Victory modal
+  // ---------------------------------------------------------------- G'alaba oynasi
 
-  function openVictoryModal(prize) {
-    victoryPrizeTitle.innerText = prize.title;
-    victoryPrizeBox.className = `victory-prize-display rarity-${prize.rarity}`;
-    victoryPrizeBox.style.borderColor = prize.hex_color || '#3b82f6';
-    victoryPrizeBox.style.boxShadow = `0 0 45px ${prize.hex_color || '#3b82f6'}`;
+  function openVictoryModal(prize, { resumed = false } = {}) {
+    if (!prize) return;
+    const info = rarityInfo(prize.rarity);
 
-    // display_image — yuklangan fayl yoki tashqi URL (nisbiy yo'l ham bo'lishi mumkin)
+    victoryKicker.innerText = resumed ? 'Sizni kutayotgan sovg\'a' : 'Tabriklaymiz!';
+    victoryPrizeTitle.innerText = prize.title || '';
+    victoryRarity.innerText = info.label;
+    victoryPrizeEmoji.innerText = info.icon;
+    victoryPrizeBox.className = `reveal-inner rarity-${prize.rarity || 'COMMON'}`;
+
     const imageSrc = prize.display_image || prize.image_url || '';
-
     if (imageSrc) {
+      victoryPrizeImg.onerror = () => hide(victoryPrizeImg);
+      victoryPrizeImg.onload = () => { victoryPrizeEmoji.style.visibility = 'hidden'; };
+      victoryPrizeEmoji.style.visibility = '';
       victoryPrizeImg.src = imageSrc;
-      victoryPrizeImg.style.display = 'block';
-      // Rasm yuklanmasa rasmni yashiramiz, sarlavha qoladi
-      victoryPrizeImg.onerror = () => { victoryPrizeImg.style.display = 'none'; };
+      show(victoryPrizeImg);
     } else {
       victoryPrizeImg.removeAttribute('src');
-      victoryPrizeImg.style.display = 'none';
+      victoryPrizeEmoji.style.visibility = '';
+      hide(victoryPrizeImg);
     }
 
-    victoryModal.classList.add('active');
+    openModal(victoryModal);
+
+    // Karta aylanib ochiladi, keyin konfetti
+    setTimeout(() => {
+      victoryPrizeBox.classList.add('flipped');
+      haptic.impact(prize.rarity === 'LEGENDARY' ? 'heavy' : 'medium');
+    }, resumed ? 150 : 450);
+
+    setTimeout(() => celebrate(prize.rarity), resumed ? 600 : 1000);
   }
 
-  function closeVictoryModal() {
-    victoryModal.classList.remove('active');
-  }
+  function celebrate(rarity) {
+    if (typeof window.confetti !== 'function') return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-  if (btnClaimVictory) {
-    btnClaimVictory.addEventListener('click', () => {
-      closeVictoryModal();
-      openLeadModal();
+    const legendary = rarity === 'LEGENDARY';
+    const colors = legendary
+      ? ['#fde047', '#eab308', '#fff7cc', '#f59e0b']
+      : ['#7c6cf6', '#a855f7', '#ec4899', '#3b82f6', '#10b981'];
+
+    const burst = (x, angle) => window.confetti({
+      particleCount: legendary ? 90 : 50,
+      spread: legendary ? 80 : 60,
+      angle,
+      startVelocity: legendary ? 55 : 45,
+      origin: { x, y: 0.6 },
+      colors,
+      zIndex: 150,
+      disableForReducedMotion: true,
     });
+
+    burst(0.1, 60);
+    burst(0.9, 120);
+    if (legendary) setTimeout(() => { burst(0.5, 90); }, 350);
   }
 
-  // ---------------------------------------------------------------- Lead forma
+  btnClaimVictory.addEventListener('click', () => {
+    haptic.impact('light');
+    // Konfetti forma ustida uchib, xalaqit bermasin
+    if (typeof window.confetti?.reset === 'function') window.confetti.reset();
+    closeModal(victoryModal);
+    openLeadModal();
+  });
+
+  // ---------------------------------------------------------------- Forma
 
   function openLeadModal() {
-    leadModal.classList.add('active');
+    const phone = savedProfile && savedProfile.phone_digits;
+    phoneError && hide(phoneError);
+    inputPhone.classList.remove('is-invalid');
+    inputFirstName.classList.remove('is-invalid');
+
+    if (phone) {
+      // Avval kiritilgan ma'lumotlar — faqat tasdiqlash kifoya
+      inputFirstName.value = savedProfile.first_name || '';
+      inputLastName.value = savedProfile.last_name || '';
+      inputPhone.value = formatPhoneDigits(phone);
+      savedName.innerText = `${savedProfile.first_name || ''} ${savedProfile.last_name || ''}`.trim();
+      savedPhone.innerText = `+998 ${formatPhoneDigits(phone)}`;
+      show(savedProfileBox);
+      hide(profileFields);
+    } else {
+      if (!inputFirstName.value && telegramUser?.first_name) inputFirstName.value = telegramUser.first_name;
+      if (!inputLastName.value && telegramUser?.last_name) inputLastName.value = telegramUser.last_name;
+      hide(savedProfileBox);
+      show(profileFields);
+    }
+
+    openModal(leadModal);
   }
 
-  function closeLeadModal() {
-    leadModal.classList.remove('active');
-  }
-
-  // Telefon: foydalanuvchi faqat 9 ta raqam kiritadi, +998 prefiks doim turadi
-  function formatPhoneDigits(digits) {
-    const parts = [digits.slice(0, 2), digits.slice(2, 5), digits.slice(5, 7), digits.slice(7, 9)];
-    return parts.filter(Boolean).join(' ');
-  }
+  btnEditProfile?.addEventListener('click', () => {
+    hide(savedProfileBox);
+    show(profileFields);
+    inputPhone.focus();
+  });
 
   function getPhoneDigits() {
-    return inputPhone ? inputPhone.value.replace(/\D/g, '').slice(0, 9) : '';
+    return inputPhone.value.replace(/\D/g, '').slice(0, 9);
   }
 
-  if (inputPhone) {
-    inputPhone.addEventListener('input', () => {
-      let digits = inputPhone.value.replace(/\D/g, '');
-      // Foydalanuvchi +998 yoki 998 bilan boshlab yozsa yoki nusxalasa — kesib tashlaymiz
-      if (digits.startsWith('998')) digits = digits.slice(3);
-      inputPhone.value = formatPhoneDigits(digits.slice(0, 9));
-    });
+  inputPhone.addEventListener('input', () => {
+    let digits = inputPhone.value.replace(/\D/g, '');
+    // Foydalanuvchi +998 yoki 998 bilan boshlab yozsa yoki nusxalasa — kesib tashlaymiz
+    if (digits.startsWith('998') && digits.length > 9) digits = digits.slice(3);
+    inputPhone.value = formatPhoneDigits(digits.slice(0, 9));
+    if (getPhoneDigits().length === 9) {
+      inputPhone.classList.remove('is-invalid');
+      hide(phoneError);
+    }
+  });
+
+  inputFirstName.addEventListener('input', () => inputFirstName.classList.remove('is-invalid'));
+
+  leadForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitLead();
+  });
+
+  function setSubmitting(on) {
+    submittingLead = on;
+    btnSubmitLead.disabled = on;
+    if (mainButton) {
+      if (on) { mainButton.showProgress(false); mainButton.disable(); }
+      else { mainButton.hideProgress(); mainButton.enable(); }
+    }
   }
 
-  if (leadForm) {
-    leadForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
+  async function submitLead() {
+    if (submittingLead) return;
 
-      if (!currentWonPrize) {
-        alert("Yutib olingan sovg'a topilmadi!");
-        return;
-      }
+    if (!currentWonPrize) {
+      toast("Rasmiylashtiriladigan sovg'a topilmadi");
+      closeModal(leadModal);
+      return;
+    }
 
-      const phoneDigits = getPhoneDigits();
+    const firstName = inputFirstName.value.trim();
+    const phoneDigits = getPhoneDigits();
+
+    if (!firstName || phoneDigits.length !== 9) {
+      // Xato bo'lsa, maydonlarni ko'rsatamiz
+      hide(savedProfileBox);
+      show(profileFields);
+      if (!firstName) inputFirstName.classList.add('is-invalid');
       if (phoneDigits.length !== 9) {
-        alert("Telefon raqamini to'liq kiriting: +998 dan keyin 9 ta raqam");
-        if (inputPhone) inputPhone.focus();
+        inputPhone.classList.add('is-invalid');
+        show(phoneError);
+      }
+      haptic.notify('error');
+      (!firstName ? inputFirstName : inputPhone).focus();
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const resp = await fetch('/api/claim-prize/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          init_data: initDataRaw,
+          first_name: firstName,
+          last_name: inputLastName.value.trim(),
+          phone_number: '+998' + phoneDigits
+        })
+      });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        toast(data.error || "Ma'lumotlarni saqlashda xatolik");
+        // Server holati o'zgargan bo'lishi mumkin (masalan, boshqa qurilmada rasmiylashtirilgan)
+        if (resp.status === 400) {
+          closeModal(leadModal);
+          loadUserState().catch(() => {});
+        }
         return;
       }
 
-      const submitBtn = leadForm.querySelector('button[type="submit"]');
-      if (submitBtn) submitBtn.disabled = true;
+      closeModal(leadModal);
+      applyUserState(data);
+      haptic.notify('success');
+      toast("Yutuq saqlandi! QR-kodingiz tayyor", 'success');
 
-      const payload = {
-        init_data: initDataRaw,
-        prize_id: currentWonPrize.id,
-        first_name: inputFirstName.value.trim(),
-        last_name: inputLastName.value.trim(),
-        phone_number: '+998' + phoneDigits
-      };
+      // Yangi yutuq g'oliblar ro'yxatiga ham qo'shildi — keyingi ochilishda yangilansin
+      winnersLoaded = false;
 
-      try {
-        const resp = await fetch('/api/claim-prize/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const data = await resp.json();
-
-        if (!resp.ok) {
-          alert(data.error || "Ma'lumotlarni saqlashda xatolik");
-          return;
-        }
-
-        closeLeadModal();
-
-        userAvailableSpins = data.available_spins || 0;
-        userReferralLink = data.referral_link || userReferralLink;
-
-        updateSpinButtonUI();
-        updateReferralHub(userReferralLink, data.invited_count || 0, userAvailableSpins, data.referrals_per_spin);
-        renderHistory(data.winnings || []);
-
-        // Yangi yutuq g'oliblar ro'yxatiga ham qo'shildi — keyingi ochilishda yangilansin
-        winnersLoaded = false;
-
-        // Foydalanuvchini to'g'ridan-to'g'ri QR-kodi turgan bo'limga olib o'tamiz
-        switchTab('history');
-
-      } catch (err) {
-        console.error('Claim prize error:', err);
-        alert('Serverga saqlashda xatolik yuz berdi');
-      } finally {
-        if (submitBtn) submitBtn.disabled = false;
+      switchTab('history');
+      if (data.winning_result) {
+        setTimeout(() => openQRModal(data.winning_result), 350);
       }
-    });
+
+    } catch (err) {
+      console.error('Claim prize error:', err);
+      toast("Serverga saqlashda xatolik yuz berdi");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  // ---------------------------------------------------------------- Tab 2: tarix
+  // ---------------------------------------------------------------- Tab 2: yutuqlarim
 
   const STATUS_LABELS = {
     ACTIVE: 'Aktiv',
@@ -464,61 +718,60 @@ document.addEventListener('DOMContentLoaded', () => {
     EXPIRED: "Muddati o'tgan"
   };
 
-  function renderHistory(winnings) {
-    myWinnings = Array.isArray(winnings) ? winnings : [];
+  function prizeThumb(prize, className) {
+    const info = rarityInfo(prize.rarity);
+    const src = prize.display_image || prize.image_url || '';
+    return `
+      <div class="${className}">
+        <span>${info.icon}</span>
+        ${src ? `<img src="${escapeHTML(src)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+      </div>`;
+  }
 
-    if (!historyList) return;
+  function renderHistory(winnings) {
+    const list = Array.isArray(winnings) ? winnings : [];
     historyList.innerHTML = '';
 
     // Appbar'dagi qizil belgi — faqat aktiv (hali olinmagan) yutuqlar soni
-    const activeCount = myWinnings.filter((w) => w.status === 'ACTIVE').length;
-    if (historyBadge) {
-      historyBadge.innerText = activeCount;
-      activeCount > 0 ? show(historyBadge) : hide(historyBadge);
-    }
+    const activeCount = list.filter((w) => w.status === 'ACTIVE').length;
+    historyBadge.innerText = activeCount;
+    activeCount > 0 ? show(historyBadge) : hide(historyBadge);
 
-    if (myWinnings.length === 0) {
+    if (list.length === 0) {
       show(historyEmpty);
       return;
     }
     hide(historyEmpty);
 
-    myWinnings.forEach((w) => {
+    list.forEach((w) => {
       const prize = w.prize || {};
       const status = w.status || 'ACTIVE';
-      const canShowQR = status === 'ACTIVE';
+      const isActive = status === 'ACTIVE';
+
+      const when = isActive
+        ? `${formatDateTime(w.expires_at)} gacha`
+        : status === 'USED'
+          ? formatDateTime(w.used_at)
+          : formatDateTime(w.expires_at);
 
       const card = document.createElement('div');
-      card.className = 'winning-item-card';
-
-      const expiresText = status === 'ACTIVE'
-        ? `Amal qiladi: ${formatDateTime(w.expires_at)}`
-        : status === 'USED'
-          ? `Berilgan: ${formatDateTime(w.used_at)}`
-          : `Muddati tugagan: ${formatDateTime(w.expires_at)}`;
-
+      card.className = `win-card rarity-${escapeHTML(prize.rarity)}${isActive ? '' : ' is-inactive'}`;
       card.innerHTML = `
-        <div class="winning-item-info">
-          <div class="winning-item-badge rarity-${escapeHTML(prize.rarity)}"
-               style="color:${escapeHTML(prize.hex_color || '#3b82f6')}; border:1px solid ${escapeHTML(prize.hex_color || '#3b82f6')}">
-            ${escapeHTML(prize.rarity || '')}
+        ${prizeThumb(prize, 'win-thumb')}
+        <div class="win-body">
+          <div class="win-title">${escapeHTML(prize.title || '')}</div>
+          <div class="win-meta">
+            <span class="status-chip ${escapeHTML(status)}">${escapeHTML(STATUS_LABELS[status] || status)}</span>
+            <span class="win-code">${escapeHTML(w.promo_code || '')}</span>
           </div>
-          <div>
-            <div class="winning-item-title">${escapeHTML(prize.title || '')}</div>
-            <div class="winning-item-code">${escapeHTML(w.promo_code || '')}</div>
-            <div class="history-meta">
-              <span class="status-chip ${escapeHTML(status)}">${escapeHTML(STATUS_LABELS[status] || status)}</span>
-              <span style="margin-left:.35rem">${escapeHTML(expiresText)}</span>
-            </div>
-          </div>
+          <div class="win-meta">${escapeHTML(when)}</div>
         </div>
-        <button class="btn-view-qr" ${canShowQR ? '' : 'disabled'}>
-          ${canShowQR ? '📱 QR-kod' : '—'}
-        </button>
+        ${isActive ? `<button class="btn btn-secondary btn-qr" type="button">${icon('qr')} QR</button>` : ''}
       `;
 
-      if (canShowQR) {
-        card.querySelector('.btn-view-qr').addEventListener('click', () => {
+      if (isActive) {
+        card.querySelector('.btn-qr').addEventListener('click', () => {
+          haptic.impact('light');
           openQRModal(w);
         });
       }
@@ -567,12 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
         show(winnersTotal);
       }
 
-      if (winnersOffset === 0) {
-        show(winnersEmpty);
-      } else {
-        hide(winnersEmpty);
-      }
-
+      winnersOffset === 0 ? show(winnersEmpty) : hide(winnersEmpty);
       data.has_more ? show(btnLoadMoreWinners) : hide(btnLoadMoreWinners);
 
     } catch (err) {
@@ -580,32 +828,25 @@ document.addEventListener('DOMContentLoaded', () => {
       if (winnersOffset === 0) {
         show(winnersError);
       } else {
-        alert("Ro'yxatning davomini yuklab bo'lmadi.");
+        toast("Ro'yxatning davomini yuklab bo'lmadi");
       }
     } finally {
       hide(winnersLoading);
       btnLoadMoreWinners.disabled = false;
-      btnLoadMoreWinners.innerText = 'Yana ko\'rsatish';
+      btnLoadMoreWinners.innerText = "Yana ko'rsatish";
       winnersBusy = false;
     }
   }
 
   function buildWinnerRow(w, rank) {
     const row = document.createElement('div');
-    row.className = 'winner-row';
-    row.style.borderLeftColor = w.prize_color || '#3b82f6';
+    row.className = `winner-row rarity-${escapeHTML(w.prize_rarity)}`;
 
     const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
-    const img = w.prize_image
-      ? `<img src="${escapeHTML(w.prize_image)}" alt="" onerror="this.remove()">`
-      : '';
 
     row.innerHTML = `
       <div class="winner-rank">${escapeHTML(medal)}</div>
-      <div class="winner-thumb">
-        <span>${rarityIcon(w.prize_rarity)}</span>
-        ${img}
-      </div>
+      ${prizeThumb({ rarity: w.prize_rarity, display_image: w.prize_image }, 'winner-thumb')}
       <div class="winner-body">
         <div class="winner-name">${escapeHTML(w.display_name)}</div>
         <div class="winner-prize">${escapeHTML(w.prize_title || '')}</div>
@@ -615,17 +856,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return row;
   }
 
-  if (btnLoadMoreWinners) {
-    btnLoadMoreWinners.addEventListener('click', () => loadWinners(false));
-  }
+  btnLoadMoreWinners.addEventListener('click', () => loadWinners(false));
+  btnRetryWinners.addEventListener('click', () => loadWinners(true));
 
-  if (btnRetryWinners) {
-    btnRetryWinners.addEventListener('click', () => loadWinners(true));
-  }
+  // ---------------------------------------------------------------- QR oynasi
 
-  // ---------------------------------------------------------------- QR modal
-
-  /** Joriy modalda ochilgan sovg'aning Google Maps havolasi */
+  /** Joriy oynada ochilgan sovg'aning Google Maps havolasi */
   let currentMapLink = '';
 
   function openQRModal(winning) {
@@ -641,18 +877,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.QRCode) {
       new QRCode(qrModalQrcode, {
         text: promoCode,
-        width: 180,
-        height: 180,
+        width: 190,
+        height: 190,
         colorDark: '#000000',
         colorLight: '#ffffff',
         correctLevel: QRCode.CorrectLevel.H
       });
     } else {
       qrModalQrcode.innerHTML =
-        `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(promoCode)}" alt="QR">`;
+        `<img src="https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=${encodeURIComponent(promoCode)}" alt="QR" width="190" height="190">`;
     }
 
-    qrViewModal.classList.add('active');
+    openModal(qrViewModal);
   }
 
   /**
@@ -675,64 +911,81 @@ document.addEventListener('DOMContentLoaded', () => {
     currentMapLink ? show(btnOpenMap) : hide(btnOpenMap);
   }
 
-  if (btnOpenMap) {
-    btnOpenMap.addEventListener('click', () => {
-      if (!currentMapLink) return;
-      if (tg && tg.openLink) {
-        tg.openLink(currentMapLink);
+  btnOpenMap.addEventListener('click', () => {
+    if (!currentMapLink) return;
+    if (tg && tg.openLink) tg.openLink(currentMapLink);
+    else window.open(currentMapLink, '_blank');
+  });
+
+  btnCloseQrModal.addEventListener('click', () => closeModal(qrViewModal));
+
+  // ---------------------------------------------------------------- Referal
+
+  function updateReferralHub(data) {
+    const perSpin = data.referrals_per_spin || 3;
+    const invited = data.invited_count || 0;
+    const friends = Array.isArray(data.referral_friends) ? data.referral_friends : [];
+
+    refLinkInput.value = userReferralLink;
+    invitedCountBadge.innerText = invited;
+
+    // Yangi qo'shilgan do'st joyi "sakrab" to'ladi
+    const newlyAdded = lastFriendCount !== null && invited > lastFriendCount;
+    lastFriendCount = invited;
+
+    friendSlots.innerHTML = '';
+    for (let i = 0; i < perSpin; i++) {
+      const slot = document.createElement('div');
+      const name = friends[i];
+      if (name) {
+        slot.className = 'friend-slot filled' + (newlyAdded && i === friends.length - 1 ? ' pop' : '');
+        slot.textContent = (name.trim()[0] || '?').toUpperCase();
+        slot.title = name;
       } else {
-        window.open(currentMapLink, '_blank');
+        slot.className = 'friend-slot';
+        slot.innerHTML = icon('plus');
       }
-    });
+      friendSlots.appendChild(slot);
+    }
+
+    const remaining = perSpin - friends.length;
+    referralHint.textContent = friends.length === 0
+      ? `Havolangiz orqali ${perSpin} ta do'stingiz qo'shilsa, sovg'ani yana bir marta ochasiz`
+      : `Zo'r! Yana ${remaining} ta do'st — va sovg'ani yana bir marta ochasiz`;
+
+    if (newlyAdded) {
+      haptic.notify('success');
+      toast("Do'stingiz qo'shildi!", 'success', 2400);
+    }
   }
 
-  if (btnCloseQrModal) {
-    btnCloseQrModal.addEventListener('click', () => {
-      qrViewModal.classList.remove('active');
-    });
+  function shareReferral() {
+    haptic.impact('light');
+    const link = refLinkInput.value || userReferralLink;
+    const shareText = encodeURIComponent(
+      "🎁 Yoshlar Texnoparki Gift Box barabanida ishtirok eting va qimmatbaho yutuqlarni yutib oling!"
+    );
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${shareText}`;
+
+    if (tg && tg.openTelegramLink) tg.openTelegramLink(shareUrl);
+    else window.open(shareUrl, '_blank');
   }
 
-  // ---------------------------------------------------------------- Referral
+  btnShareTg.addEventListener('click', shareReferral);
 
-  if (btnCopyRef) {
-    btnCopyRef.addEventListener('click', () => {
-      const link = refLinkInput.value;
-      const done = () => {
-        btnCopyRef.innerText = '✅ Nusxalandi!';
-        setTimeout(() => { btnCopyRef.innerText = '📋 Nusxalash'; }, 2000);
-      };
-
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(link).then(done).catch(() => {
-          refLinkInput.select();
-          document.execCommand('copy');
-          done();
-        });
-      } else {
-        refLinkInput.select();
-        document.execCommand('copy');
-        done();
-      }
-    });
-  }
-
-  if (btnShareTg) {
-    btnShareTg.addEventListener('click', () => {
-      const link = refLinkInput.value;
-      const shareText = encodeURIComponent(
-        "🚀 Yoshlar Texnoparki Gift Box barabanida ishtirok eting va qimmatbaho yutuqlarni yutib oling!"
-      );
-      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${shareText}`;
-
-      if (tg && tg.openTelegramLink) {
-        tg.openTelegramLink(shareUrl);
-      } else {
-        window.open(shareUrl, '_blank');
-      }
-    });
-  }
+  btnCopyRef.addEventListener('click', async () => {
+    const link = refLinkInput.value || userReferralLink;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch (e) {
+      refLinkInput.select();
+      document.execCommand('copy');
+    }
+    haptic.notify('success');
+    toast('Havola nusxalandi', 'success', 2000);
+  });
 
   // ---------------------------------------------------------------- Start
 
-  checkInitialUserStatus();
+  init();
 });

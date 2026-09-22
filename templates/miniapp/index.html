@@ -2,176 +2,219 @@
 <html lang="uz">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f19">
   <title>Yoshlar Texnoparki</title>
-
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <!-- QRCode.js Library -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
 
-  <!-- Custom CSS -->
-  <link rel="stylesheet" href="/static/css/style.css?v=20260922b">
+  <!-- G'alaba paytidagi konfetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js" defer></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="/static/css/style.css?v=20260923a">
 </head>
 <body>
 
+  <!-- Ikonkalar to'plami (Lucide uslubida) — <svg><use href="#i-gift"/></svg> -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol>
+      <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 11v2"/><path d="M13 17v2"/></symbol>
+      <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+      <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+      <symbol id="i-volume-off" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></symbol>
+      <symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+      <symbol id="i-qr" viewBox="0 0 24 24"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- Bildirishnomalar (alert() o'rniga) -->
+  <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
   <!-- App Header -->
   <header class="app-header">
-    <div class="brand-badge">
+    <div class="brand">
       <div class="brand-logo">YT</div>
       <div class="brand-text">
         <h1>Yoshlar Texnoparki</h1>
         <p id="header-subtitle">Gift Box</p>
       </div>
     </div>
-    <button id="sound-toggle" class="sound-toggle active" title="Ovozni o'chirish/yoqish">
-      🔊
+    <button id="sound-toggle" class="icon-btn is-on" type="button" aria-label="Ovozni o'chirish">
+      <svg class="icon icon-on"><use href="#i-volume"/></svg>
+      <svg class="icon icon-off"><use href="#i-volume-off"/></svg>
     </button>
   </header>
 
-  <!-- Main View Container -->
   <main class="main-wrapper">
+
+    <!-- Telegram'dan tashqarida ochilganda -->
+    <section id="outside-telegram" class="state-box hidden">
+      <span class="state-icon"><svg class="icon"><use href="#i-lock"/></svg></span>
+      <h3>Telegram orqali oching</h3>
+      <p>Baraban faqat Telegram bot ichida ishlaydi.</p>
+      <a class="btn btn-secondary" href="https://t.me/texnogiftbot">@texnogiftbot'ni ochish</a>
+    </section>
 
     <!-- ============================================================ -->
     <!-- TAB 1: BARABAN                                               -->
     <!-- ============================================================ -->
     <section id="view-spin" class="tab-view active">
 
-      <div class="roulette-wrapper">
-        <div class="roulette-header">
-          <h2>Gift Ochish Barabani</h2>
-          <p>Tugmani bosing va qimmatbaho yutuqlardan birini qo'lga kiriting!</p>
+      <div class="roulette-card">
+        <div class="roulette-head">
+          <div>
+            <h2>Sovg'a barabani</h2>
+            <p>Tugmani bosing — baraban sizga sovg'a tanlaydi</p>
+          </div>
+          <div class="spins-chip" id="spins-chip" title="Aylantirish imkoniyatlari">
+            <svg class="icon"><use href="#i-gift"/></svg>
+            <b id="spins-count-badge">–</b>
+          </div>
         </div>
 
         <div id="roulette-viewport" class="roulette-viewport">
-          <!-- Center pointer line indicator -->
           <div class="selector-pointer"></div>
-
-          <!-- Dynamic cards track -->
           <div id="roulette-track" class="roulette-track">
-            <!-- Rendered by roulette.js -->
+            <!-- Sovg'alar yuklanguncha skelet kartalar -->
+            <div class="prize-card skeleton"></div>
+            <div class="prize-card skeleton"></div>
+            <div class="prize-card skeleton"></div>
+            <div class="prize-card skeleton"></div>
+            <div class="prize-card skeleton"></div>
           </div>
+        </div>
+
+        <div class="rarity-legend">
+          <span><i class="dot rarity-COMMON"></i>Oddiy</span>
+          <span><i class="dot rarity-RARE"></i>Noyob</span>
+          <span><i class="dot rarity-EPIC"></i>Epik</span>
+          <span><i class="dot rarity-LEGENDARY"></i>Afsonaviy</span>
         </div>
       </div>
 
-      <!-- Action Button -->
-      <button id="spin-btn" class="btn-spin">
-        <span id="spin-btn-text">🔑 Ochish</span>
+      <!-- Asosiy tugma: holatga qarab "Ochish" / "Rasmiylashtirish" / "Taklif qilish" -->
+      <button id="spin-btn" class="btn btn-primary btn-xl" type="button" disabled>
+        <svg class="icon" id="spin-btn-icon"><use href="#i-gift"/></svg>
+        <span id="spin-btn-text">Yuklanmoqda…</span>
       </button>
 
-      <!-- Rarity badges legend -->
-      <div class="flex items-center justify-center gap-3 text-xs text-gray-400">
-        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span> Common</span>
-        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span> Rare</span>
-        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-pink-500 inline-block"></span> Epic</span>
-        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-yellow-500 inline-block"></span> Legendary</span>
-      </div>
-
-      <!-- REFERRAL HUB CARD -->
+      <!-- REFERAL KARTASI -->
       <div id="referral-card" class="referral-card">
-        <div class="referral-header">
-          <div class="referral-icon">👥</div>
-          <div class="referral-info">
-            <h3>Do'stlarni Taklif Qiling!</h3>
-            <p>Havolani <b>3 ta do'stingizga</b> ulashing — ular qo'shilsa, barabanni aylantirishga <b>+1 imkoniyat</b> olasiz!</p>
+        <div class="referral-head">
+          <div class="referral-icon"><svg class="icon"><use href="#i-users"/></svg></div>
+          <div>
+            <h3>3 do'st = +1 imkoniyat</h3>
+            <p id="referral-hint">Havolangiz orqali 3 ta do'stingiz qo'shilsa, sovg'ani yana bir marta ochasiz</p>
           </div>
         </div>
 
-        <div class="referral-progress">
-          <div class="referral-progress-head">
-            <span>Keyingi sovg'a imkoniyati</span>
-            <b id="ref-progress-text">0/3</b>
-          </div>
-          <div class="referral-progress-track">
-            <div id="ref-progress-fill" class="referral-progress-fill" style="width:0%"></div>
-          </div>
+        <!-- Joriy tsikldagi do'stlar: to'lgan joylarda ism bosh harfi -->
+        <div id="friend-slots" class="friend-slots" aria-label="Taklif qilingan do'stlar">
+          <div class="friend-slot"><svg class="icon"><use href="#i-plus"/></svg></div>
+          <div class="friend-slot"><svg class="icon"><use href="#i-plus"/></svg></div>
+          <div class="friend-slot"><svg class="icon"><use href="#i-plus"/></svg></div>
         </div>
 
-        <div class="referral-input-box">
-          <input type="text" id="ref-link-input" class="referral-input" readonly value="https://t.me/texnogiftbot?start=ref_">
-          <button id="btn-copy-ref" class="btn-copy-ref">📋 Nusxalash</button>
+        <div class="referral-actions">
+          <button id="btn-share-tg" class="btn btn-telegram" type="button">
+            <svg class="icon"><use href="#i-send"/></svg>
+            Do'stlarga ulashish
+          </button>
+          <button id="btn-copy-ref" class="btn btn-ghost btn-square" type="button" aria-label="Havolani nusxalash">
+            <svg class="icon"><use href="#i-copy"/></svg>
+          </button>
         </div>
 
-        <button id="btn-share-tg" class="btn-share-tg">
-          🚀 Telegram'da Do'stlarga Ulashish
-        </button>
-
-        <div class="flex items-center justify-between text-xs text-slate-300 pt-1 border-t border-slate-700/60">
-          <span>Taklif qilgan do'stlaringiz: <b id="invited-count-badge" class="text-amber-400 font-extrabold">0</b> ta</span>
-          <span>Imkoniyatlar: <b id="spins-count-badge" class="text-emerald-400 font-extrabold">1</b> ta</span>
+        <div class="referral-foot">
+          <span>Jami taklif qilganlar: <b id="invited-count-badge">0</b></span>
+          <input type="text" id="ref-link-input" class="sr-only" readonly tabindex="-1" aria-hidden="true">
         </div>
       </div>
 
     </section>
 
     <!-- ============================================================ -->
-    <!-- TAB 2: YUTUQLAR TARIXI                                       -->
+    <!-- TAB 2: YUTUQLARIM                                            -->
     <!-- ============================================================ -->
     <section id="view-history" class="tab-view">
 
       <div class="view-header">
-        <h2>🎁 Yutuqlarim</h2>
-        <p>Siz yutib olgan sovg'alar va ularning QR-kodlari</p>
+        <h2>Yutuqlarim</h2>
+        <p>QR-kodni Texnopark xodimiga ko'rsatib sovg'angizni oling</p>
       </div>
 
-      <!-- Bo'sh holat -->
       <div id="history-empty" class="state-box">
-        <span class="state-icon">📭</span>
+        <span class="state-icon"><svg class="icon"><use href="#i-ticket"/></svg></span>
         <h3>Hali yutug'ingiz yo'q</h3>
         <p>Barabanni aylantiring va birinchi sovg'angizni qo'lga kiriting!</p>
-        <button class="btn-goto-spin" data-goto="spin">🎰 Barabanga o'tish</button>
+        <button class="btn btn-secondary" data-goto="spin" type="button">Barabanga o'tish</button>
       </div>
 
-      <!-- Yuklanmoqda -->
-      <div id="history-loading" class="state-box hidden">
-        <div class="spinner"></div>
-        <p>Yuklanmoqda…</p>
+      <div id="history-loading" class="list-skeleton hidden">
+        <div class="row-skeleton"></div>
+        <div class="row-skeleton"></div>
       </div>
 
-      <div id="history-list" class="history-list"></div>
+      <div id="history-list" class="card-list"></div>
 
     </section>
 
     <!-- ============================================================ -->
-    <!-- TAB 3: YUTUQ OLGANLAR RO'YXATI                               -->
+    <!-- TAB 3: G'OLIBLAR                                             -->
     <!-- ============================================================ -->
     <section id="view-winners" class="tab-view">
 
       <div class="view-header">
-        <h2>🏆 Yutuq olganlar</h2>
-        <p>Shu botda sovg'a yutib olgan barcha ishtirokchilar</p>
+        <h2>G'oliblar</h2>
+        <p>Shu botda sovg'a yutib olgan ishtirokchilar</p>
       </div>
 
       <div id="winners-total" class="winners-total hidden">
-        Jami <b id="winners-total-count">0</b> ta yutuq berilgan
+        Jami <b id="winners-total-count">0</b> ta sovg'a berilgan
       </div>
 
-      <div id="winners-loading" class="state-box">
-        <div class="spinner"></div>
-        <p>Yuklanmoqda…</p>
+      <div id="winners-loading" class="list-skeleton">
+        <div class="row-skeleton"></div>
+        <div class="row-skeleton"></div>
+        <div class="row-skeleton"></div>
       </div>
 
       <div id="winners-empty" class="state-box hidden">
-        <span class="state-icon">🏆</span>
+        <span class="state-icon"><svg class="icon"><use href="#i-trophy"/></svg></span>
         <h3>Hali g'oliblar yo'q</h3>
         <p>Birinchi bo'lib siz yutib olishingiz mumkin!</p>
-        <button class="btn-goto-spin" data-goto="spin">🎰 Barabanga o'tish</button>
+        <button class="btn btn-secondary" data-goto="spin" type="button">Barabanga o'tish</button>
       </div>
 
       <div id="winners-error" class="state-box hidden">
-        <span class="state-icon">⚠️</span>
+        <span class="state-icon"><svg class="icon"><use href="#i-alert"/></svg></span>
         <h3>Ro'yxatni yuklab bo'lmadi</h3>
         <p>Internet aloqasini tekshiring.</p>
-        <button id="btn-retry-winners" class="btn-goto-spin">🔄 Qayta urinish</button>
+        <button id="btn-retry-winners" class="btn btn-secondary" type="button">
+          <svg class="icon"><use href="#i-refresh"/></svg> Qayta urinish
+        </button>
       </div>
 
-      <div id="winners-list" class="winners-list"></div>
+      <div id="winners-list" class="card-list"></div>
 
-      <button id="btn-load-more-winners" class="btn-load-more hidden">
+      <button id="btn-load-more-winners" class="btn btn-ghost btn-block hidden" type="button">
         Yana ko'rsatish
       </button>
 
@@ -179,123 +222,139 @@
 
   </main>
 
-  <!-- ============================================================ -->
-  <!-- PASTKI APPBAR                                                -->
-  <!-- ============================================================ -->
+  <!-- PASTKI APPBAR -->
   <nav class="appbar" role="tablist" aria-label="Asosiy bo'limlar">
-    <button class="appbar-item active" data-view="spin" role="tab" aria-selected="true">
-      <span class="appbar-icon">🎰</span>
+    <button class="appbar-item active" data-view="spin" role="tab" aria-selected="true" type="button">
+      <svg class="icon"><use href="#i-gift"/></svg>
       <span class="appbar-label">Baraban</span>
     </button>
-    <button class="appbar-item" data-view="history" role="tab" aria-selected="false">
-      <span class="appbar-icon">🎁</span>
+    <button class="appbar-item" data-view="history" role="tab" aria-selected="false" type="button">
+      <svg class="icon"><use href="#i-ticket"/></svg>
       <span class="appbar-label">Yutuqlarim</span>
       <span id="history-badge" class="appbar-badge hidden">0</span>
     </button>
-    <button class="appbar-item" data-view="winners" role="tab" aria-selected="false">
-      <span class="appbar-icon">🏆</span>
+    <button class="appbar-item" data-view="winners" role="tab" aria-selected="false" type="button">
+      <svg class="icon"><use href="#i-trophy"/></svg>
       <span class="appbar-label">G'oliblar</span>
     </button>
   </nav>
 
-  <!-- STEP 1: GRAND VICTORY CELEBRATION MODAL -->
-  <div id="victory-modal" class="modal-overlay">
+  <!-- 1-QADAM: G'ALABA OYNASI -->
+  <div id="victory-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="victory-heading">
     <div class="victory-card">
-      <div class="victory-banner">
-        🎉 TABRIKLAYMIZ! YUTUQ TUSHDI! 🎉
+      <p class="victory-kicker" id="victory-kicker">Tabriklaymiz!</p>
+      <h2 class="victory-heading" id="victory-heading">Sizga sovg'a tushdi</h2>
+
+      <div class="reveal">
+        <div id="victory-prize-box" class="reveal-inner">
+          <div class="reveal-back"><svg class="icon"><use href="#i-gift"/></svg></div>
+          <div class="reveal-front">
+            <span id="victory-rarity" class="rarity-pill">Oddiy</span>
+            <div class="victory-art">
+              <span id="victory-prize-emoji" class="victory-emoji">⭐</span>
+              <img id="victory-prize-img" src="" alt="" class="victory-prize-img hidden">
+            </div>
+            <div id="victory-prize-title" class="victory-prize-title">—</div>
+          </div>
+        </div>
       </div>
 
-      <p class="text-xs text-slate-300">Siz barabandan quyidagi qimmatbaho sovg'ani yutib oldingiz:</p>
-
-      <div id="victory-prize-box" class="victory-prize-display">
-        <img id="victory-prize-img" src="" alt="Prize" class="victory-prize-img" style="display:none;">
-        <div id="victory-prize-title" class="victory-prize-title">---</div>
-      </div>
-
-      <button id="btn-claim-victory" class="btn-claim-victory">
-        🎁 Yutuqni Qabul Qilish
+      <button id="btn-claim-victory" class="btn btn-success btn-xl" type="button">
+        <svg class="icon"><use href="#i-check"/></svg>
+        Yutuqni olish
       </button>
     </div>
   </div>
 
-  <!-- STEP 2: LEAD FORM MODAL -->
-  <div id="lead-modal" class="modal-overlay">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="w-12 h-12 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center mx-auto mb-2 text-2xl">
-          📝
-        </div>
-        <h3>Yutuqni Rasmiylashtirish</h3>
-        <p>Yutuqni biriktirish uchun ism va telefon raqamingizni kiriting:</p>
+  <!-- 2-QADAM: MA'LUMOTLAR FORMASI (pastdan chiqadigan oyna) -->
+  <div id="lead-modal" class="modal-overlay sheet" role="dialog" aria-modal="true" aria-labelledby="lead-heading">
+    <div class="sheet-card">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h3 id="lead-heading">Yutuqni rasmiylashtirish</h3>
+        <p>Sovg'ani berishda siz bilan bog'lanish uchun kerak</p>
       </div>
 
-      <form id="lead-form">
-        <div class="form-group">
-          <label for="input-first-name">Ismingiz *</label>
-          <input type="text" id="input-first-name" class="form-control" placeholder="Ali" required>
+      <form id="lead-form" novalidate>
+        <!-- Avval saqlangan ma'lumotlar bo'lsa — faqat tasdiqlash -->
+        <div id="saved-profile" class="saved-profile hidden">
+          <div>
+            <div class="saved-name" id="saved-name">—</div>
+            <div class="saved-phone" id="saved-phone">—</div>
+          </div>
+          <button type="button" id="btn-edit-profile" class="link-btn">O'zgartirish</button>
         </div>
 
-        <div class="form-group">
-          <label for="input-last-name">Familiyangiz</label>
-          <input type="text" id="input-last-name" class="form-control" placeholder="Valiyev">
-        </div>
+        <div id="profile-fields">
+          <div class="form-group">
+            <label for="input-first-name">Ismingiz</label>
+            <input type="text" id="input-first-name" class="form-control" placeholder="Ali" autocomplete="given-name" required>
+          </div>
 
-        <div class="form-group">
-          <label for="input-phone">Telefon raqamingiz *</label>
-          <div class="phone-field">
-            <span class="phone-prefix">+998</span>
-            <input type="tel" id="input-phone" class="form-control phone-input"
-                   placeholder="90 123 45 67" inputmode="numeric" autocomplete="tel-national"
-                   maxlength="12" required>
+          <div class="form-group">
+            <label for="input-last-name">Familiyangiz <span class="optional">(ixtiyoriy)</span></label>
+            <input type="text" id="input-last-name" class="form-control" placeholder="Valiyev" autocomplete="family-name">
+          </div>
+
+          <div class="form-group">
+            <label for="input-phone">Telefon raqamingiz</label>
+            <div class="phone-field">
+              <span class="phone-prefix">+998</span>
+              <input type="tel" id="input-phone" class="form-control phone-input"
+                     placeholder="90 123 45 67" inputmode="numeric" autocomplete="tel-national"
+                     maxlength="12" required>
+            </div>
+            <p class="field-error hidden" id="phone-error">+998 dan keyin 9 ta raqam kiriting</p>
           </div>
         </div>
 
-        <button type="submit" class="btn-submit">
-          ✅ Yutuqni Saqlash
+        <!-- Telegram ichida pastki MainButton ishlatiladi, bu tugma yashiriladi -->
+        <button type="submit" class="btn btn-primary btn-xl" id="btn-submit-lead">
+          <svg class="icon"><use href="#i-check"/></svg>
+          Yutuqni saqlash
         </button>
       </form>
     </div>
   </div>
 
-  <!-- QR CODE VIEWER MODAL -->
-  <div id="qr-view-modal" class="modal-overlay">
-    <div class="modal-card flex flex-col items-center gap-4 text-center">
-      <div class="modal-header">
-        <h3 id="qr-modal-title">Yutuq QR-Kodi</h3>
-        <p class="text-xs text-slate-300">Texnopark xodimiga ushbu QR-kodni skanerlash uchun ko'rsating</p>
+  <!-- QR-KOD OYNASI -->
+  <div id="qr-view-modal" class="modal-overlay sheet" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
+    <div class="sheet-card qr-sheet">
+      <div class="sheet-grip"></div>
+      <button id="btn-close-qr-modal" class="icon-btn sheet-close" type="button" aria-label="Yopish">
+        <svg class="icon"><use href="#i-x"/></svg>
+      </button>
+
+      <div class="sheet-head">
+        <h3 id="qr-modal-title">Yutuq QR-kodi</h3>
+        <p>Texnopark xodimiga skanerlash uchun ko'rsating</p>
       </div>
 
       <div class="qr-box">
         <div id="qr-modal-qrcode"></div>
       </div>
 
-      <div class="flex flex-col items-center gap-1">
-        <span class="text-xs text-slate-400 uppercase tracking-widest font-bold">Promokod</span>
-        <div class="promo-badge">
-          <span id="qr-modal-promocode">TX-XXXX</span>
-        </div>
+      <div class="promo-block">
+        <span class="promo-label">Promokod</span>
+        <span id="qr-modal-promocode" class="promo-code">TX-XXXX</span>
       </div>
 
       <!-- Sovg'ani olish manzili — admin paneldan kiritiladi -->
       <div id="qr-location" class="qr-location hidden">
         <div class="qr-location-head">
-          <span class="qr-location-pin">📍</span>
-          <span>Sovg'ani olish manzili</span>
+          <svg class="icon"><use href="#i-map-pin"/></svg>
+          Sovg'ani olish manzili
         </div>
         <p id="qr-location-address" class="qr-location-address"></p>
-        <button type="button" id="btn-open-map" class="btn-open-map hidden">
-          🗺️ Google Maps'da ochish
+        <button type="button" id="btn-open-map" class="btn btn-success btn-block hidden">
+          <svg class="icon"><use href="#i-map-pin"/></svg>
+          Xaritada ochish
         </button>
       </div>
-
-      <button id="btn-close-qr-modal" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-xl">
-        Yopish
-      </button>
     </div>
   </div>
 
-  <!-- Custom Scripts -->
-  <script src="/static/js/roulette.js?v=20260922b"></script>
-  <script src="/static/js/app.js?v=20260922b"></script>
+  <script src="/static/js/roulette.js?v=20260923a"></script>
+  <script src="/static/js/app.js?v=20260923a"></script>
 </body>
 </html>
