@@ -10,11 +10,13 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.decorators import user_passes_test
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from app_main.dashboard_services import (
@@ -39,31 +41,71 @@ staff_required = user_passes_test(_is_staff, login_url='/dashboard/login/')
 
 # ---------------------------------------------------------------- Auth
 
+def _safe_next(request, param='next', fallback='/dashboard/'):
+    """
+    Foydalanuvchi bergan manzilga faqat u shu saytga tegishli bo'lsagina
+    yo'naltiramiz. "//boshqa-sayt.uz" ham "/" bilan boshlanadi, shuning
+    uchun oddiy startswith('/') tekshiruvi yetarli emas.
+    """
+    url = request.GET.get(param) or request.POST.get(param) or ''
+    if url and url_has_allowed_host_and_scheme(
+        url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return url
+    return fallback
+
+
+# Parolni brute-force qilishga qarshi: bir IP dan 15 daqiqada 10 urinish
+LOGIN_MAX_ATTEMPTS = 10
+LOGIN_BLOCK_SECONDS = 15 * 60
+
+
+def _login_throttle_key(request):
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    ip = forwarded.split(',')[0].strip() if forwarded else request.META.get('REMOTE_ADDR', '')
+    return 'dashboard-login-attempts:{0}'.format(ip or 'unknown')
+
+
 def dashboard_login(request):
     if _is_staff(request.user):
         return redirect('dashboard-index')
 
+    throttle_key = _login_throttle_key(request)
+    attempts = cache.get(throttle_key, 0)
+
     if request.method == 'POST':
+        if attempts >= LOGIN_MAX_ATTEMPTS:
+            messages.error(
+                request,
+                "Juda ko'p urinish bo'ldi. 15 daqiqadan keyin qayta urinib ko'ring."
+            )
+            return render(request, 'dashboard/login.html', status=429)
+
         username = (request.POST.get('username') or '').strip()
         password = request.POST.get('password') or ''
         user = authenticate(request, username=username, password=password)
 
-        if user is None:
-            messages.error(request, "Login yoki parol noto'g'ri.")
-        elif not user.is_staff:
-            messages.error(request, "Bu hisobda admin paneliga kirish huquqi yo'q.")
+        if user is None or not user.is_staff:
+            # Urinishlar sonini faqat muvaffaqiyatsiz holatda oshiramiz
+            cache.set(throttle_key, attempts + 1, LOGIN_BLOCK_SECONDS)
+            if user is not None and not user.is_staff:
+                messages.error(request, "Bu hisobda admin paneliga kirish huquqi yo'q.")
+            else:
+                messages.error(request, "Login yoki parol noto'g'ri.")
         else:
             login(request, user)
-            next_url = request.GET.get('next') or '/dashboard/'
-            # Ochiq redirect (open redirect) xavfini oldini olish
-            if not next_url.startswith('/'):
-                next_url = '/dashboard/'
-            return redirect(next_url)
+            cache.delete(throttle_key)
+            return redirect(_safe_next(request))
 
     return render(request, 'dashboard/login.html')
 
 
+@require_POST
 def dashboard_logout(request):
+    """
+    Chiqish faqat POST orqali — GET havola bo'lsa, boshqa saytdagi rasm
+    yoki havola foydalanuvchini bildirmasdan tizimdan chiqarib yuborishi mumkin.
+    """
     logout(request)
     return redirect('dashboard-login')
 
@@ -214,7 +256,13 @@ def lead_list(request):
 @staff_required
 def lead_export(request):
     """Filtrlangan o'quvchilar ro'yxatini CSV (Excel) faylga eksport qiladi."""
-    base = StudentLead.objects.select_related('referrer').prefetch_related('winnings__prize')
+    base = (
+        StudentLead.objects
+        .select_related('referrer')
+        .prefetch_related('winnings__prize')
+        # Har bir qator uchun alohida COUNT so'rovi ketmasligi uchun
+        .annotate(invited_count=Count('referrals', distinct=True))
+    )
     leads, _q = _filter_leads(request, base)
 
     stamp = timezone.localtime(timezone.now()).strftime('%Y-%m-%d_%H-%M')
@@ -237,7 +285,7 @@ def lead_export(request):
             lead.first_name,
             lead.last_name or '',
             lead.phone_number,
-            lead.referrals.count(),
+            lead.invited_count,
             lead.extra_spins,
             prizes,
             timezone.localtime(lead.created_at).strftime('%Y-%m-%d %H:%M'),
@@ -311,7 +359,8 @@ def winning_activate(request, pk):
             )
         )
 
-    return redirect('dashboard-winnings')
+    # Xodim qaysi filtr va sahifada turgan bo'lsa, o'sha yerga qaytadi
+    return redirect(_safe_next(request, fallback='/dashboard/winnings/'))
 
 
 @staff_required

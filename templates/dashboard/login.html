@@ -6,9 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
   <title>Kirish — Yoshlar Texnoparki Admin</title>
-  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+  <meta name="theme-color" content="#0b0f19">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260923b">
 </head>
 <body>
+
+{% include 'dashboard/_icons.html' %}
 
 <div class="login-wrap">
   <div class="login-card">
@@ -26,30 +32,36 @@
     {% if messages %}
       <div class="messages">
         {% for message in messages %}
-          <div class="msg {{ message.tags }}">
-            <span>⛔</span><span>{{ message }}</span>
+          <div class="msg {{ message.tags }}" role="alert">
+            <svg class="ic"><use href="#ic-{% if message.tags == 'success' %}check{% else %}alert{% endif %}"/></svg>
+            <span>{{ message }}</span>
           </div>
         {% endfor %}
       </div>
     {% endif %}
 
-    <form method="post" autocomplete="off">
+    <form method="post">
       {% csrf_token %}
+      {# Kirishdan keyin foydalanuvchi so'ragan sahifaga qaytadi #}
+      {% if request.GET.next %}
+        <input type="hidden" name="next" value="{{ request.GET.next }}">
+      {% endif %}
 
       <div class="form-row">
         <label for="username">Login</label>
         <input type="text" id="username" name="username" class="form-input"
-               placeholder="admin" required autofocus>
+               placeholder="admin" autocomplete="username"
+               autocapitalize="none" spellcheck="false" required autofocus>
       </div>
 
       <div class="form-row">
         <label for="password">Parol</label>
         <input type="password" id="password" name="password" class="form-input"
-               placeholder="••••••••" required>
+               placeholder="••••••••" autocomplete="current-password" required>
       </div>
 
       <button type="submit" class="btn btn-primary btn-block" style="margin-top:1.2rem">
-        Kirish
+        <svg class="ic"><use href="#ic-logout"/></svg> Kirish
       </button>
     </form>
 

@@ -10,12 +10,14 @@
     <p class="sub">O'quvchining QR-kodini skanerlang yoki promokodni qo'lda kiriting</p>
   </div>
   <div class="page-actions">
-    <a href="{% url 'dashboard-winnings' %}" class="btn">🏆 Yutuqlar jurnali</a>
+    <a href="{% url 'dashboard-winnings' %}" class="btn">
+      <svg class="ic"><use href="#ic-trophy"/></svg> Yutuqlar jurnali
+    </a>
   </div>
 </div>
 
 <div class="msg info" style="margin-bottom:1.1rem">
-  <span>ℹ️</span>
+  <svg class="ic"><use href="#ic-info"/></svg>
   <span>
     Skanerlash sovg'ani <b>darhol bermaydi</b> — avval o'quvchi ma'lumoti chiqadi,
     keyin «Sovg'ani berish» tugmasini bosasiz.
@@ -34,8 +36,12 @@
     <div id="qr-reader"></div>
 
     <div class="row-actions" style="margin-top:.9rem">
-      <button type="button" class="btn btn-primary" id="btn-start">📷 Kamerani yoqish</button>
-      <button type="button" class="btn" id="btn-stop" style="display:none">⏹ To'xtatish</button>
+      <button type="button" class="btn btn-primary" id="btn-start">
+        <svg class="ic"><use href="#ic-camera"/></svg> Kamerani yoqish
+      </button>
+      <button type="button" class="btn" id="btn-stop" style="display:none">
+        <svg class="ic"><use href="#ic-x"/></svg> To'xtatish
+      </button>
     </div>
 
     <div class="form-row" style="margin-top:1.2rem">
@@ -56,7 +62,7 @@
     </div>
 
     <div id="res-empty" class="empty">
-      <span class="icon">📷</span>
+      <span class="icon"><svg class="ic"><use href="#ic-camera"/></svg></span>
       QR-kod skanerlanmagan
     </div>
 
@@ -68,12 +74,13 @@
       <div class="result-row"><span class="k">Muddati</span><span class="v" id="res-expires">—</span></div>
 
       <div id="res-error" class="msg error" style="display:none;margin-top:1rem">
-        <span>⛔</span><span id="res-error-text"></span>
+        <svg class="ic" id="res-error-icon"><use href="#ic-alert"/></svg>
+        <span id="res-error-text"></span>
       </div>
 
       <button type="button" class="btn btn-success btn-block" id="btn-confirm"
               style="margin-top:1.1rem;display:none">
-        ✓ Sovg'ani berish va tasdiqlash
+        <svg class="ic"><use href="#ic-check"/></svg> Sovg'ani berish va tasdiqlash
       </button>
 
       <button type="button" class="btn btn-block" id="btn-reset" style="margin-top:.6rem">
@@ -112,6 +119,7 @@
     prize:   document.getElementById('res-prize'),
     expires: document.getElementById('res-expires'),
     error:   document.getElementById('res-error'),
+    errorIcon: document.getElementById('res-error-icon'),
     errorText: document.getElementById('res-error-text')
   };
 
@@ -124,6 +132,16 @@
   function setStatus(text, cls) {
     el.status.textContent = text;
     el.status.className = 'badge ' + cls;
+  }
+
+  // Sovg'a darajasi nomlari — MiniApp bilan bir xil
+  var RARITY_LABELS = {
+    COMMON: 'Oddiy', RARE: 'Noyob', EPIC: 'Epik', LEGENDARY: 'Afsonaviy'
+  };
+
+  // Xabar ikonkasini almashtiradi (xato / muvaffaqiyat)
+  function setMsgIcon(name) {
+    if (el.errorIcon) el.errorIcon.firstElementChild.setAttribute('href', '#ic-' + name);
   }
 
   function showError(text) {
@@ -154,7 +172,8 @@
       el.phone.textContent = winning.lead.phone_number;
     }
     if (winning.prize) {
-      el.prize.textContent = winning.prize.title + ' [' + winning.prize.rarity + ']';
+      var label = RARITY_LABELS[winning.prize.rarity] || winning.prize.rarity;
+      el.prize.textContent = winning.prize.title + ' (' + label + ')';
     }
     el.expires.textContent = formatDate(winning.expires_at);
   }
@@ -228,7 +247,7 @@
     el.errorText.textContent = text || 'Sovg\'a berildi.';
     el.error.style.display = 'flex';
     el.error.className = 'msg success';
-    el.error.firstElementChild.textContent = '✅';
+    setMsgIcon('check');
   }
 
   // ---------------------------------------------------------- Kamera
@@ -265,7 +284,7 @@
     el.empty.style.display = 'none';
     el.body.style.display = 'block';
     el.error.className = 'msg error';
-    el.error.firstElementChild.textContent = '⛔';
+    setMsgIcon('alert');
     showError(text);
   }
 
@@ -302,13 +321,13 @@
     if (!currentCode) return;
     if (!window.confirm(currentCode + ' — sovg\'a berildi deb tasdiqlansinmi?')) return;
     el.error.className = 'msg error';
-    el.error.firstElementChild.textContent = '⛔';
+    setMsgIcon('alert');
     verify(currentCode, true);
   });
 
   el.reset.addEventListener('click', function () {
     el.error.className = 'msg error';
-    el.error.firstElementChild.textContent = '⛔';
+    setMsgIcon('alert');
     resetResult();
     el.input.focus();
   });

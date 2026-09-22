@@ -122,6 +122,27 @@ REST_FRAMEWORK = {
     ],
 }
 
+# Xavfsizlik sozlamalari — faqat productionda (DEBUG=False) yoqiladi.
+# Sayt Nginx orqali HTTPS'da ishlaydi, shuning uchun proxy sarlavhasi kerak.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').strip().lower() in ('1', 'true', 'yes', 'on')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SAMESITE = 'Lax'
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+    # HSTS: brauzer saytni faqat HTTPS orqali ochadi (1 yil)
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
+
+# MiniApp Telegram Web ichida iframe'da ochiladi (app_main/web_views.py ga qarang),
+# qolgan sahifalar boshqa saytga joylashtirilmaydi.
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+
 # Telegram Bot Token & WebApp URL
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_WEBAPP_URL = os.getenv('TELEGRAM_WEBAPP_URL', 'http://127.0.0.1:8000')

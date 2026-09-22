@@ -10,20 +10,23 @@
     <p class="sub">Ro'yxatdan o'tgan o'quvchilar bazasi — {{ total_found }} ta topildi</p>
   </div>
   <div class="page-actions">
-    <a href="{% url 'dashboard-leads-export' %}?q={{ q|urlencode }}"
-       class="btn btn-primary">⬇ CSV (Excel) yuklab olish</a>
+    <a href="{% url 'dashboard-leads-export' %}?q={{ q|urlencode }}" class="btn btn-primary">
+      <svg class="ic"><use href="#ic-download"/></svg> CSV (Excel) yuklab olish
+    </a>
   </div>
 </div>
 
 <form method="get" class="filter-bar">
   <div class="form-row">
     <label for="q">Qidiruv</label>
-    <input type="text" id="q" name="q" class="form-input" value="{{ q }}"
+    <input type="search" id="q" name="q" class="form-input" value="{{ q }}"
            placeholder="Ism, familiya, telefon yoki Telegram ID">
   </div>
 
   <div class="row-actions">
-    <button type="submit" class="btn btn-primary">Filtrlash</button>
+    <button type="submit" class="btn btn-primary">
+      <svg class="ic"><use href="#ic-search"/></svg> Filtrlash
+    </button>
     {% if q %}
       <a href="{% url 'dashboard-leads' %}" class="btn">Tozalash</a>
     {% endif %}
@@ -33,43 +36,51 @@
 <div class="panel">
   {% if page_obj.object_list %}
     <div class="table-wrap">
-      <table>
+      <table class="table-cards">
         <thead>
           <tr>
-            <th>O'quvchi</th>
-            <th>Telefon</th>
-            <th style="text-align:right">Yutuq</th>
-            <th style="text-align:right">Taklif qilgan</th>
-            <th style="text-align:right">Spin</th>
-            <th>Kim orqali keldi</th>
-            <th>Sana</th>
+            <th scope="col">O'quvchi</th>
+            <th scope="col">Telefon</th>
+            <th scope="col" style="text-align:right">Yutuq</th>
+            <th scope="col" style="text-align:right">Taklif qilgan</th>
+            <th scope="col" style="text-align:right">Spin</th>
+            <th scope="col">Kim orqali keldi</th>
+            <th scope="col">Sana</th>
           </tr>
         </thead>
         <tbody>
           {% for lead in page_obj %}
             <tr>
-              <td>
-                <div class="td-strong">{{ lead.first_name }} {{ lead.last_name|default:'' }}</div>
-                <div class="td-muted mono">{{ lead.telegram_id }}</div>
+              <td data-label="O'quvchi">
+                <div>
+                  <div class="td-strong">{{ lead.first_name }} {{ lead.last_name|default:'' }}</div>
+                  <div class="td-muted mono">{{ lead.telegram_id }}</div>
+                </div>
               </td>
-              <td class="mono">{{ lead.phone_number }}</td>
-              <td style="text-align:right" class="td-strong">{{ lead.win_count }}</td>
-              <td style="text-align:right">
+              <td data-label="Telefon" class="mono">
+                {% if lead.phone_number %}
+                  <a href="tel:{{ lead.phone_number }}">{{ lead.phone_number }}</a>
+                {% else %}
+                  <span class="td-muted">—</span>
+                {% endif %}
+              </td>
+              <td data-label="Yutuq" style="text-align:right" class="td-strong">{{ lead.win_count }}</td>
+              <td data-label="Taklif qilgan" style="text-align:right">
                 {% if lead.invited_count %}
                   <span class="badge on">{{ lead.invited_count }}</span>
                 {% else %}
                   <span class="td-muted">0</span>
                 {% endif %}
               </td>
-              <td style="text-align:right" class="td-muted">+{{ lead.extra_spins }}</td>
-              <td class="td-muted">
+              <td data-label="Spin" style="text-align:right" class="td-muted">+{{ lead.extra_spins }}</td>
+              <td data-label="Kim orqali keldi" class="td-muted">
                 {% if lead.referrer %}
                   {{ lead.referrer.first_name }} {{ lead.referrer.last_name|default:'' }}
                 {% else %}
                   —
                 {% endif %}
               </td>
-              <td class="td-muted">{{ lead.created_at|date:"d.m.Y H:i" }}</td>
+              <td data-label="Sana" class="td-muted">{{ lead.created_at|date:"d.m.Y H:i" }}</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -80,7 +91,7 @@
 
   {% else %}
     <div class="empty">
-      <span class="icon">👥</span>
+      <span class="icon"><svg class="ic"><use href="#ic-users"/></svg></span>
       {% if q %}
         Filtrga mos o'quvchi topilmadi.
         <div style="margin-top:.9rem">

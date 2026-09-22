@@ -11,14 +11,18 @@
     <p class="sub">Loyihaning umumiy ko'rsatkichlari va so'nggi harakatlar</p>
   </div>
   <div class="page-actions">
-    <a href="{% url 'dashboard-leads-export' %}" class="btn">⬇ O'quvchilar CSV</a>
-    <a href="{% url 'dashboard-prize-create' %}" class="btn btn-primary">+ Sovg'a qo'shish</a>
+    <a href="{% url 'dashboard-leads-export' %}" class="btn">
+      <svg class="ic"><use href="#ic-download"/></svg> O'quvchilar CSV
+    </a>
+    <a href="{% url 'dashboard-prize-create' %}" class="btn btn-primary">
+      <svg class="ic"><use href="#ic-plus"/></svg> Sovg'a qo'shish
+    </a>
   </div>
 </div>
 
 {% if prob.active_count == 0 %}
   <div class="msg warning" style="margin-bottom:1.1rem">
-    <span>⚠️</span>
+    <svg class="ic"><use href="#ic-alert"/></svg>
     <span>
       Hozircha birorta <b>aktiv sovg'a</b> yo'q — baraban ishlamaydi.
       <a href="{% url 'dashboard-prize-create' %}" style="text-decoration:underline">Sovg'a qo'shing</a>.
@@ -79,7 +83,10 @@
   </div>
 
   <div class="panel">
-    <div class="panel-title">Rarity bo'yicha yutuqlar</div>
+    <div class="panel-title">
+      <span>Daraja bo'yicha yutuqlar</span>
+      <span class="hint">qaysi darajadagi sovg'alar ko'p chiqqan</span>
+    </div>
     {% if rarity_rows %}
       {% for row in rarity_rows %}
         <div class="bar-row">
@@ -93,7 +100,7 @@
         </div>
       {% endfor %}
     {% else %}
-      <div class="empty"><span class="icon">📭</span>Hali yutuqlar yo'q</div>
+      <div class="empty"><span class="icon"><svg class="ic"><use href="#ic-trophy"/></svg></span>Hali yutuqlar yo'q</div>
     {% endif %}
   </div>
 
@@ -133,7 +140,7 @@
         <span><i class="legend-dot" style="background:#6366f1"></i> Real natija</span>
       </div>
     {% else %}
-      <div class="empty"><span class="icon">🎁</span>Sovg'alar qo'shilmagan</div>
+      <div class="empty"><span class="icon"><svg class="ic"><use href="#ic-gift"/></svg></span>Sovg'alar qo'shilmagan</div>
     {% endif %}
   </div>
 
@@ -148,32 +155,34 @@
 
   {% if recent %}
     <div class="table-wrap">
-      <table>
+      <table class="table-cards">
         <thead>
           <tr>
-            <th>Promokod</th><th>O'quvchi</th><th>Telefon</th>
-            <th>Sovg'a</th><th>Holati</th><th>Vaqti</th>
+            <th scope="col">Promokod</th><th scope="col">O'quvchi</th><th scope="col">Telefon</th>
+            <th scope="col">Sovg'a</th><th scope="col">Holati</th><th scope="col">Vaqti</th>
           </tr>
         </thead>
         <tbody>
           {% for w in recent %}
             <tr>
-              <td class="mono td-strong">{{ w.promo_code }}</td>
-              <td>{{ w.lead.first_name }} {{ w.lead.last_name|default:'' }}</td>
-              <td class="td-muted mono">{{ w.lead.phone_number }}</td>
-              <td>
-                <span class="badge {{ w.prize.rarity }}">{{ w.prize.rarity }}</span>
+              <td data-label="Promokod" class="mono td-strong">{{ w.promo_code }}</td>
+              <td data-label="O'quvchi">{{ w.lead.first_name }} {{ w.lead.last_name|default:'' }}</td>
+              <td data-label="Telefon" class="td-muted mono">
+                <a href="tel:{{ w.lead.phone_number }}">{{ w.lead.phone_number }}</a>
+              </td>
+              <td data-label="Sovg'a">
+                <span class="badge {{ w.prize.rarity }}">{{ w.prize.get_rarity_display }}</span>
                 <span style="margin-left:.4rem">{{ w.prize.title }}</span>
               </td>
-              <td><span class="badge {{ w.status }}">{{ w.get_status_display }}</span></td>
-              <td class="td-muted">{{ w.created_at|date:"d.m.Y H:i" }}</td>
+              <td data-label="Holati"><span class="badge {{ w.status }}">{{ w.get_status_display }}</span></td>
+              <td data-label="Vaqti" class="td-muted">{{ w.created_at|date:"d.m.Y H:i" }}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   {% else %}
-    <div class="empty"><span class="icon">📭</span>Hali hech kim baraban aylantirmagan</div>
+    <div class="empty"><span class="icon"><svg class="ic"><use href="#ic-trophy"/></svg></span>Hali hech kim baraban aylantirmagan</div>
   {% endif %}
 </div>
 

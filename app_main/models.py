@@ -61,10 +61,10 @@ class PrizeCategory(models.Model):
 
 class Prize(models.Model):
     class Rarity(models.TextChoices):
-        COMMON = 'COMMON', 'Ko\'k (Common)'
-        RARE = 'RARE', 'Siyohrang (Rare)'
-        EPIC = 'EPIC', 'Pushti (Epic)'
-        LEGENDARY = 'LEGENDARY', 'Oltin (Legendary)'
+        COMMON = 'COMMON', 'Oddiy'
+        RARE = 'RARE', 'Noyob'
+        EPIC = 'EPIC', 'Epik'
+        LEGENDARY = 'LEGENDARY', 'Afsonaviy'
 
     title = models.CharField(max_length=100, verbose_name="Sovg'a nomi")
     category = models.ForeignKey(

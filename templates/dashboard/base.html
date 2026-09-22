@@ -3,15 +3,23 @@
 <html lang="uz">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0b0f19">
   <title>{% block title %}Admin Dashboard{% endblock %} — Yoshlar Texnoparki</title>
-  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260923a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260923b">
   {% block head_extra %}{% endblock %}
 </head>
 <body>
 
-<button class="menu-toggle" id="menu-toggle" type="button" aria-label="Menyu">☰</button>
+{% include 'dashboard/_icons.html' %}
+
+<button class="menu-toggle" id="menu-toggle" type="button" aria-label="Menyuni ochish" aria-expanded="false" aria-controls="sidebar">
+  <svg class="ic"><use href="#ic-menu"/></svg>
+</button>
 <div class="backdrop" id="backdrop"></div>
 
 <div class="layout">
@@ -25,32 +33,38 @@
       </div>
     </div>
 
-    <nav class="nav">
+    <nav class="nav" aria-label="Asosiy menyu">
       <div class="nav-label">Asosiy</div>
-      <a href="{% url 'dashboard-index' %}" class="nav-item {% if active_page == 'index' %}active{% endif %}">
-        <span class="nav-icon">📊</span> Statistika
+      <a href="{% url 'dashboard-index' %}" class="nav-item {% if active_page == 'index' %}active{% endif %}"
+         {% if active_page == 'index' %}aria-current="page"{% endif %}>
+        <svg class="ic"><use href="#ic-chart"/></svg> Statistika
       </a>
-      <a href="{% url 'dashboard-prizes' %}" class="nav-item {% if active_page == 'prizes' %}active{% endif %}">
-        <span class="nav-icon">🎁</span> Sovg'alar
+      <a href="{% url 'dashboard-prizes' %}" class="nav-item {% if active_page == 'prizes' %}active{% endif %}"
+         {% if active_page == 'prizes' %}aria-current="page"{% endif %}>
+        <svg class="ic"><use href="#ic-gift"/></svg> Sovg'alar
       </a>
-      <a href="{% url 'dashboard-categories' %}" class="nav-item {% if active_page == 'categories' %}active{% endif %}">
-        <span class="nav-icon">📦</span> Kategoriyalar
+      <a href="{% url 'dashboard-categories' %}" class="nav-item {% if active_page == 'categories' %}active{% endif %}"
+         {% if active_page == 'categories' %}aria-current="page"{% endif %}>
+        <svg class="ic"><use href="#ic-box"/></svg> Kategoriyalar
       </a>
 
       <div class="nav-label">Ma'lumotlar</div>
-      <a href="{% url 'dashboard-leads' %}" class="nav-item {% if active_page == 'leads' %}active{% endif %}">
-        <span class="nav-icon">👥</span> O'quvchilar
+      <a href="{% url 'dashboard-leads' %}" class="nav-item {% if active_page == 'leads' %}active{% endif %}"
+         {% if active_page == 'leads' %}aria-current="page"{% endif %}>
+        <svg class="ic"><use href="#ic-users"/></svg> O'quvchilar
       </a>
-      <a href="{% url 'dashboard-winnings' %}" class="nav-item {% if active_page == 'winnings' %}active{% endif %}">
-        <span class="nav-icon">🏆</span> Yutuqlar
+      <a href="{% url 'dashboard-winnings' %}" class="nav-item {% if active_page == 'winnings' %}active{% endif %}"
+         {% if active_page == 'winnings' %}aria-current="page"{% endif %}>
+        <svg class="ic"><use href="#ic-trophy"/></svg> Yutuqlar
       </a>
 
       <div class="nav-label">Amallar</div>
-      <a href="{% url 'dashboard-scan' %}" class="nav-item {% if active_page == 'scan' %}active{% endif %}">
-        <span class="nav-icon">📷</span> QR Skaner
+      <a href="{% url 'dashboard-scan' %}" class="nav-item {% if active_page == 'scan' %}active{% endif %}"
+         {% if active_page == 'scan' %}aria-current="page"{% endif %}>
+        <svg class="ic"><use href="#ic-scan"/></svg> QR Skaner
       </a>
       <a href="/admin/" class="nav-item" target="_blank" rel="noopener">
-        <span class="nav-icon">⚙️</span> Django Admin
+        <svg class="ic"><use href="#ic-settings"/></svg> Django Admin
       </a>
     </nav>
 
@@ -63,23 +77,29 @@
         </div>
       </div>
       <a href="{% url 'dashboard-account-password' %}"
-         class="btn btn-sm btn-block {% if active_page == 'account' %}btn-primary{% endif %}"
-         style="margin-top:.4rem">
-        🔑 Parolni o'zgartirish
+         class="btn btn-sm btn-block {% if active_page == 'account' %}btn-primary{% endif %}">
+        <svg class="ic"><use href="#ic-key"/></svg> Parolni o'zgartirish
       </a>
-      <a href="{% url 'dashboard-logout' %}" class="btn btn-sm btn-block" style="margin-top:.4rem">
-        Chiqish
-      </a>
+      {# Chiqish POST orqali — GET havolani boshqa sayt ham "bosdirishi" mumkin #}
+      <form method="post" action="{% url 'dashboard-logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-block">
+          <svg class="ic"><use href="#ic-logout"/></svg> Chiqish
+        </button>
+      </form>
     </div>
   </aside>
 
-  <main class="main">
+  <main class="main" id="main">
     {% if messages %}
-      <div class="messages">
+      <div class="messages" id="messages">
         {% for message in messages %}
-          <div class="msg {{ message.tags }}">
-            <span>{% if message.tags == 'success' %}✅{% elif message.tags == 'error' %}⛔{% else %}ℹ️{% endif %}</span>
+          <div class="msg {{ message.tags }}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}">
+            <svg class="ic"><use href="#ic-{% if message.tags == 'success' %}check{% elif message.tags == 'error' %}alert{% else %}info{% endif %}"/></svg>
             <span>{{ message }}</span>
+            <button type="button" class="msg-close" aria-label="Yopish">
+              <svg class="ic"><use href="#ic-x"/></svg>
+            </button>
           </div>
         {% endfor %}
       </div>
@@ -92,25 +112,42 @@
 
 <script>
   (function () {
+    'use strict';
+
+    // ---- Mobil menyu
     var toggle = document.getElementById('menu-toggle');
     var sidebar = document.getElementById('sidebar');
     var backdrop = document.getElementById('backdrop');
 
-    function closeMenu() {
-      sidebar.classList.remove('open');
-      backdrop.classList.remove('show');
+    function setMenu(open) {
+      sidebar.classList.toggle('open', open);
+      backdrop.classList.toggle('show', open);
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      document.body.style.overflow = open ? 'hidden' : '';
     }
 
-    if (toggle) {
-      toggle.addEventListener('click', function () {
-        sidebar.classList.toggle('open');
-        backdrop.classList.toggle('show');
+    if (toggle) toggle.addEventListener('click', function () {
+      setMenu(!sidebar.classList.contains('open'));
+    });
+    if (backdrop) backdrop.addEventListener('click', function () { setMenu(false); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') setMenu(false);
+    });
+
+    // ---- Xabarlar: qo'lda yopish va 6 soniyadan keyin o'zi yo'qolishi
+    var box = document.getElementById('messages');
+    if (box) {
+      box.addEventListener('click', function (e) {
+        var btn = e.target.closest('.msg-close');
+        if (btn) btn.parentElement.remove();
+      });
+      Array.prototype.forEach.call(box.querySelectorAll('.msg'), function (msg, i) {
+        setTimeout(function () {
+          msg.classList.add('leaving');
+          setTimeout(function () { msg.remove(); }, 300);
+        }, 6000 + i * 400);
       });
     }
-    if (backdrop) backdrop.addEventListener('click', closeMenu);
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') closeMenu();
-    });
   })();
 </script>
 

@@ -10,20 +10,24 @@
     <p class="sub">Barcha promokodlar va ularning holati — {{ total_found }} ta topildi</p>
   </div>
   <div class="page-actions">
-    <a href="{% url 'dashboard-scan' %}" class="btn">📷 QR Skaner</a>
+    <a href="{% url 'dashboard-scan' %}" class="btn">
+      <svg class="ic"><use href="#ic-scan"/></svg> QR Skaner
+    </a>
     <a href="{% url 'dashboard-winnings-export' %}?q={{ q|urlencode }}&status={{ status|urlencode }}"
-       class="btn btn-primary">⬇ CSV yuklab olish</a>
+       class="btn btn-primary">
+      <svg class="ic"><use href="#ic-download"/></svg> CSV yuklab olish
+    </a>
   </div>
 </div>
 
 <form method="get" class="filter-bar">
   <div class="form-row">
     <label for="q">Qidiruv</label>
-    <input type="text" id="q" name="q" class="form-input" value="{{ q }}"
+    <input type="search" id="q" name="q" class="form-input" value="{{ q }}"
            placeholder="Promokod, ism yoki telefon">
   </div>
 
-  <div class="form-row" style="flex:0 0 175px">
+  <div class="form-row" style="flex:0 0 190px">
     <label for="status">Holati</label>
     <select name="status" id="status" class="form-input">
       <option value="">Barchasi</option>
@@ -34,7 +38,9 @@
   </div>
 
   <div class="row-actions">
-    <button type="submit" class="btn btn-primary">Filtrlash</button>
+    <button type="submit" class="btn btn-primary">
+      <svg class="ic"><use href="#ic-search"/></svg> Filtrlash
+    </button>
     {% if q or status %}
       <a href="{% url 'dashboard-winnings' %}" class="btn">Tozalash</a>
     {% endif %}
@@ -44,26 +50,34 @@
 <div class="panel">
   {% if page_obj.object_list %}
     <div class="table-wrap">
-      <table>
+      <table class="table-cards">
         <thead>
           <tr>
-            <th>Promokod</th>
-            <th>O'quvchi</th>
-            <th>Sovg'a</th>
-            <th>Holati</th>
-            <th>Muddati</th>
-            <th style="text-align:right">Amal</th>
+            <th scope="col">Promokod</th>
+            <th scope="col">O'quvchi</th>
+            <th scope="col">Sovg'a</th>
+            <th scope="col">Holati</th>
+            <th scope="col">Muddati</th>
+            <th scope="col" style="text-align:right">Amal</th>
           </tr>
         </thead>
         <tbody>
           {% for w in page_obj %}
             <tr>
-              <td class="mono td-strong">{{ w.promo_code }}</td>
-              <td>
-                <div class="td-strong">{{ w.lead.first_name }} {{ w.lead.last_name|default:'' }}</div>
-                <div class="td-muted mono">{{ w.lead.phone_number }}</div>
+              <td data-label="Promokod" class="mono td-strong">{{ w.promo_code }}</td>
+
+              <td data-label="O'quvchi">
+                <div>
+                  <div class="td-strong">{{ w.lead.first_name }} {{ w.lead.last_name|default:'' }}</div>
+                  {% if w.lead.phone_number %}
+                    <a class="td-muted mono" href="tel:{{ w.lead.phone_number }}">{{ w.lead.phone_number }}</a>
+                  {% else %}
+                    <span class="td-muted">telefon kiritilmagan</span>
+                  {% endif %}
+                </div>
               </td>
-              <td>
+
+              <td data-label="Sovg'a">
                 <div class="cell-prize">
                   <div class="prize-thumb" style="width:32px;height:32px;font-size:.95rem">
                     <span>{% if w.prize.rarity == 'LEGENDARY' %}🏆{% elif w.prize.rarity == 'EPIC' %}💎{% elif w.prize.rarity == 'RARE' %}🎁{% else %}⭐{% endif %}</span>
@@ -73,12 +87,19 @@
                   </div>
                   <div>
                     <div>{{ w.prize.title }}</div>
-                    <span class="badge {{ w.prize.rarity }}">{{ w.prize.rarity }}</span>
+                    <span class="badge {{ w.prize.rarity }}">{{ w.prize.get_rarity_display }}</span>
                   </div>
                 </div>
               </td>
-              <td><span class="badge {{ w.status }}">{{ w.get_status_display }}</span></td>
-              <td class="td-muted">
+
+              <td data-label="Holati">
+                <span class="badge {{ w.status }}"
+                      {% if w.status == 'PENDING' %}title="O'quvchi barabanni aylantirgan, lekin ism va telefonini hali yubormagan"{% endif %}>
+                  {{ w.get_status_display }}
+                </span>
+              </td>
+
+              <td data-label="Muddati" class="td-muted">
                 {{ w.expires_at|date:"d.m.Y H:i" }}
                 {% if w.used_at %}
                   <div style="color:var(--success);font-size:.75rem">
@@ -86,13 +107,18 @@
                   </div>
                 {% endif %}
               </td>
-              <td>
+
+              <td data-label="Amal"{% if w.status != 'ACTIVE' %} class="is-empty-action"{% endif %}>
                 <div class="row-actions" style="justify-content:flex-end">
                   {% if w.status == 'ACTIVE' %}
                     <form method="post" action="{% url 'dashboard-winning-activate' w.pk %}" class="inline-form"
                           onsubmit="return confirm('{{ w.promo_code }} — «{{ w.prize.title|escapejs }}» berildi deb belgilansinmi?');">
                       {% csrf_token %}
-                      <button type="submit" class="btn btn-sm btn-success">✓ Berildi</button>
+                      {# Amaldan keyin xodim o'sha filtr va sahifaga qaytadi #}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" class="btn btn-sm btn-success">
+                        <svg class="ic"><use href="#ic-check"/></svg> Berildi
+                      </button>
                     </form>
                   {% else %}
                     <span class="td-muted">—</span>
@@ -109,7 +135,7 @@
 
   {% else %}
     <div class="empty">
-      <span class="icon">🏆</span>
+      <span class="icon"><svg class="ic"><use href="#ic-trophy"/></svg></span>
       {% if q or status %}
         Filtrga mos yutuq topilmadi.
         <div style="margin-top:.9rem">

@@ -10,18 +10,20 @@
     <p class="sub">Baraban lentasidagi sovg'alar, ularning rasmi va chiqish ehtimolligi</p>
   </div>
   <div class="page-actions">
-    <a href="{% url 'dashboard-prize-create' %}" class="btn btn-primary">+ Yangi sovg'a</a>
+    <a href="{% url 'dashboard-prize-create' %}" class="btn btn-primary">
+      <svg class="ic"><use href="#ic-plus"/></svg> Yangi sovg'a
+    </a>
   </div>
 </div>
 
 {% if prob.active_count == 0 %}
   <div class="msg error" style="margin-bottom:1.1rem">
-    <span>⛔</span>
+    <svg class="ic"><use href="#ic-alert"/></svg>
     <span>Aktiv sovg'a yo'q — foydalanuvchilar baraban aylantira olmaydi.</span>
   </div>
 {% elif prob.total_weight == 0 %}
   <div class="msg error" style="margin-bottom:1.1rem">
-    <span>⛔</span>
+    <svg class="ic"><use href="#ic-alert"/></svg>
     <span>Barcha aktiv sovg'alarning ehtimolligi 0 — yutuq tanlanmaydi. Kamida bittasiga qiymat bering.</span>
   </div>
 {% endif %}
@@ -37,24 +39,24 @@
 
   {% if prizes %}
     <div class="table-wrap">
-      <table>
+      <table class="table-cards">
         <thead>
           <tr>
-            <th>Sovg'a</th>
-            <th>Kategoriya</th>
-            <th>Rarity</th>
-            <th style="text-align:right">Og'irlik</th>
-            <th style="text-align:right">Chiqish %</th>
-            <th style="text-align:right">Muddat</th>
-            <th style="text-align:right">Yutuqlar</th>
-            <th>Holati</th>
-            <th style="text-align:right">Amallar</th>
+            <th scope="col">Sovg'a</th>
+            <th scope="col">Kategoriya</th>
+            <th scope="col">Daraja</th>
+            <th scope="col" style="text-align:right">Og'irlik</th>
+            <th scope="col" style="text-align:right">Chiqish %</th>
+            <th scope="col" style="text-align:right">Muddat</th>
+            <th scope="col" style="text-align:right">Yutuqlar</th>
+            <th scope="col">Holati</th>
+            <th scope="col" style="text-align:right">Amallar</th>
           </tr>
         </thead>
         <tbody>
           {% for prize in prizes %}
             <tr>
-              <td>
+              <td data-label="Sovg'a">
                 <div class="cell-prize">
                   <div class="prize-thumb">
                     <span>{% if prize.rarity == 'LEGENDARY' %}🏆{% elif prize.rarity == 'EPIC' %}💎{% elif prize.rarity == 'RARE' %}🎁{% else %}⭐{% endif %}</span>
@@ -65,7 +67,7 @@
                   <span class="td-strong">{{ prize.title }}</span>
                 </div>
               </td>
-              <td>
+              <td data-label="Kategoriya">
                 {% if prize.category %}
                   <span class="td-muted">{{ prize.category.display_icon }} {{ prize.category.title }}</span>
                   {% if not prize.category.is_active %}
@@ -75,9 +77,9 @@
                   <span class="td-muted">—</span>
                 {% endif %}
               </td>
-              <td><span class="badge {{ prize.rarity }}">{{ prize.rarity }}</span></td>
-              <td style="text-align:right" class="td-strong">{{ prize.probability }}</td>
-              <td style="text-align:right">
+              <td data-label="Daraja"><span class="badge {{ prize.rarity }}">{{ prize.get_rarity_display }}</span></td>
+              <td data-label="Og'irlik" style="text-align:right" class="td-strong">{{ prize.probability }}</td>
+              <td data-label="Chiqish %" style="text-align:right">
                 {% if prize.is_active and prob.total_weight %}
                   <span class="td-strong">
                     {% widthratio prize.probability prob.total_weight 100 %}%
@@ -86,24 +88,28 @@
                   <span class="td-muted">—</span>
                 {% endif %}
               </td>
-              <td style="text-align:right" class="td-muted">{{ prize.valid_days }} kun</td>
-              <td style="text-align:right" class="td-muted">{{ prize.win_count }}</td>
-              <td>
+              <td data-label="Muddat" style="text-align:right" class="td-muted">{{ prize.valid_days }} kun</td>
+              <td data-label="Yutuqlar" style="text-align:right" class="td-muted">{{ prize.win_count }}</td>
+              <td data-label="Holati">
                 {% if prize.is_active %}
                   <span class="badge on">Aktiv</span>
                 {% else %}
                   <span class="badge off">O'chiq</span>
                 {% endif %}
               </td>
-              <td>
+              <td data-label="Amallar">
                 <div class="row-actions" style="justify-content:flex-end">
-                  <a href="{% url 'dashboard-prize-edit' prize.pk %}" class="btn btn-sm">✏️</a>
+                  <a href="{% url 'dashboard-prize-edit' prize.pk %}" class="btn btn-sm" title="Tahrirlash"
+                     aria-label="{{ prize.title }} — tahrirlash">
+                    <svg class="ic"><use href="#ic-edit"/></svg>
+                  </a>
 
                   <form method="post" action="{% url 'dashboard-prize-toggle' prize.pk %}" class="inline-form">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-sm"
-                            title="{% if prize.is_active %}O'chirish{% else %}Yoqish{% endif %}">
-                      {% if prize.is_active %}⏸{% else %}▶{% endif %}
+                            title="{% if prize.is_active %}Barabandan olib qo'yish{% else %}Barabanga qaytarish{% endif %}"
+                            aria-label="{{ prize.title }} — {% if prize.is_active %}o'chirish{% else %}yoqish{% endif %}">
+                      <svg class="ic"><use href="#ic-power"/></svg>
                     </button>
                   </form>
 
@@ -111,8 +117,9 @@
                         onsubmit="return confirm('«{{ prize.title|escapejs }}» butunlay o\'chirilsinmi?');">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-sm btn-danger"
-                            {% if prize.win_count %}disabled title="Yutuqlarga bog'langan — o'chirib bo'lmaydi"{% endif %}>
-                      🗑
+                            aria-label="{{ prize.title }} — o'chirish"
+                            {% if prize.win_count %}disabled title="Yutuqlarga bog'langan — o'chirib bo'lmaydi"{% else %}title="O'chirish"{% endif %}>
+                      <svg class="ic"><use href="#ic-trash"/></svg>
                     </button>
                   </form>
                 </div>
@@ -124,7 +131,7 @@
     </div>
   {% else %}
     <div class="empty">
-      <span class="icon">🎁</span>
+      <span class="icon"><svg class="ic"><use href="#ic-gift"/></svg></span>
       Hali sovg'a qo'shilmagan.
       <div style="margin-top:.9rem">
         <a href="{% url 'dashboard-prize-create' %}" class="btn btn-primary btn-sm">Birinchi sovg'ani qo'shish</a>
