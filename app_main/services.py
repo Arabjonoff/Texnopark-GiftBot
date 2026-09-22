@@ -93,7 +93,7 @@ def get_spinnable_prizes():
 
 def calculate_weighted_prize() -> Prize:
     """
-    Server-side weighted probability selection algorithm for CS2 Skin Roulette.
+    Server-side weighted probability selection algorithm for the Gift Box roulette.
     Determines prize purely on server side according to Prize.probability weights.
     """
     active_prizes = list(get_spinnable_prizes())

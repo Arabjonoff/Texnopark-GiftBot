@@ -1,8 +1,8 @@
 /**
- * CS2 Skin Roulette Scroll Engine with Web Audio API Sound Generator
+ * Gift Box Roulette Scroll Engine with Web Audio API Sound Generator
  */
 
-class CS2RouletteEngine {
+class RouletteEngine {
   constructor(trackElementId, viewportElementId) {
     this.track = document.getElementById(trackElementId);
     this.viewport = document.getElementById(viewportElementId);

@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from app_main.models import Prize
 
 class Command(BaseCommand):
-    help = 'Seeds initial CS2 skin style prizes into database'
+    help = 'Seeds initial prizes into database'
 
     def handle(self, *args, **options):
         prizes_data = [

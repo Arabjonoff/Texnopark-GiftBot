@@ -81,8 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const qrLocationAddress = document.getElementById('qr-location-address');
   const btnOpenMap = document.getElementById('btn-open-map');
 
-  // Instantiate CS2 Roulette Engine
-  const rouletteEngine = new CS2RouletteEngine('roulette-track', 'roulette-viewport');
+  // Instantiate Roulette Engine
+  const rouletteEngine = new RouletteEngine('roulette-track', 'roulette-viewport');
 
   let activePrizes = [];
   let currentWonPrize = null;
@@ -315,7 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentWonPrize = data.prize;
         const targetIndex = data.target_index || 65;
 
-        // CS2 5s deceleration animation
+        // 5s deceleration animation
         rouletteEngine.spin(activePrizes, currentWonPrize, targetIndex, (wonPrize) => {
           openVictoryModal(wonPrize);
         });

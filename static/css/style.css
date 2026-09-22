@@ -118,7 +118,7 @@ body {
   padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px) + 1.5rem);
 }
 
-/* CS2 ROULETTE ENGINE STYLES */
+/* ROULETTE ENGINE STYLES */
 .roulette-wrapper {
   width: 100%;
   background: rgba(15, 23, 42, 0.85);
@@ -207,7 +207,7 @@ body {
   transform: translateX(0px);
 }
 
-/* CS2 Skin Card */
+/* Prize Card */
 .skin-card {
   flex: 0 0 130px;
   height: 165px;
