@@ -5,6 +5,7 @@ Biznes mantiq dashboard_services.py da, bu yerda faqat so'rov/javob.
 """
 import csv
 import json
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
@@ -16,6 +17,7 @@ from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -110,6 +112,60 @@ def dashboard_logout(request):
     return redirect('dashboard-login')
 
 
+
+# ---------------------------------------------------------------- Filtrlar
+
+# Tezkor davr tugmalari: ?period=today|week|month
+PERIOD_PRESETS = {
+    'today': ("Bugun", 0),
+    'week': ("7 kun", 6),
+    'month': ("30 kun", 29),
+}
+
+
+def _date_range(request):
+    """
+    Sana oralig'ini o'qiydi: ?from=YYYY-MM-DD&to=YYYY-MM-DD yoki ?period=week.
+    Noto'g'ri sana yozilsa e'tiborsiz qoldiriladi (xato bermaydi).
+    """
+    period = (request.GET.get('period') or '').strip()
+    date_from = parse_date((request.GET.get('from') or '').strip())
+    date_to = parse_date((request.GET.get('to') or '').strip())
+
+    if period in PERIOD_PRESETS:
+        today = timezone.localdate()
+        date_from = today - timedelta(days=PERIOD_PRESETS[period][1])
+        date_to = today
+
+    # Foydalanuvchi oralig'ni teskari yozsa, o'rnini almashtiramiz
+    if date_from and date_to and date_from > date_to:
+        date_from, date_to = date_to, date_from
+
+    return date_from, date_to, period
+
+
+def _apply_date_range(queryset, field, date_from, date_to):
+    if date_from:
+        queryset = queryset.filter(**{field + '__date__gte': date_from})
+    if date_to:
+        queryset = queryset.filter(**{field + '__date__lte': date_to})
+    return queryset
+
+
+def _date_filter_context(date_from, date_to, period):
+    return {
+        'date_from': date_from.isoformat() if date_from else '',
+        'date_to': date_to.isoformat() if date_to else '',
+        'period': period,
+        'period_presets': [(key, label) for key, (label, _days) in PERIOD_PRESETS.items()],
+    }
+
+
+def _sort_choice(request, allowed, default):
+    value = (request.GET.get('sort') or '').strip()
+    return value if value in allowed else default
+
+
 # ---------------------------------------------------------------- Statistika
 
 @staff_required
@@ -128,16 +184,64 @@ def dashboard_index(request):
 
 # ---------------------------------------------------------------- Sovg'alar
 
+PRIZE_SORTS = {
+    'prob': ('-probability', 'title'),
+    'prob_asc': ('probability', 'title'),
+    'wins': ('-win_count', 'title'),
+    'new': ('-id',),
+    'title': ('title',),
+}
+
+PRIZE_SORT_LABELS = [
+    ('prob', "Ehtimollik (katta → kichik)"),
+    ('prob_asc', "Ehtimollik (kichik → katta)"),
+    ('wins', "Ko'p chiqqani"),
+    ('new', "Yangi qo'shilgani"),
+    ('title', "Nomi bo'yicha"),
+]
+
+
 @staff_required
 def prize_list(request):
-    prizes = Prize.objects.select_related('category').annotate(
-        win_count=Count('winnings'),
-    ).order_by('-probability', 'title')
+    query = (request.GET.get('q') or '').strip()
+    rarity = (request.GET.get('rarity') or '').strip()
+    category = (request.GET.get('category') or '').strip()
+    state = (request.GET.get('state') or '').strip()
+    sort = _sort_choice(request, PRIZE_SORTS, 'prob')
+
+    prizes = Prize.objects.select_related('category').annotate(win_count=Count('winnings'))
+
+    if query:
+        prizes = prizes.filter(
+            Q(title__icontains=query) | Q(pickup_address__icontains=query)
+        )
+    if rarity in Prize.Rarity.values:
+        prizes = prizes.filter(rarity=rarity)
+    if category == 'none':
+        prizes = prizes.filter(category__isnull=True)
+    elif category.isdigit():
+        prizes = prizes.filter(category_id=int(category))
+    if state == 'active':
+        prizes = prizes.filter(is_active=True)
+    elif state == 'off':
+        prizes = prizes.filter(is_active=False)
+
+    prizes = prizes.order_by(*PRIZE_SORTS[sort])
 
     context = {
         'active_page': 'prizes',
         'prizes': prizes,
+        'total_found': prizes.count(),
         'prob': get_probability_summary(),
+        'q': query,
+        'rarity': rarity,
+        'category': category,
+        'state': state,
+        'sort': sort,
+        'sort_labels': PRIZE_SORT_LABELS,
+        'rarity_choices': Prize.Rarity.choices,
+        'categories': PrizeCategory.objects.order_by('sort_order', 'title'),
+        'has_filters': bool(query or rarity or category or state),
     }
     return render(request, 'dashboard/prizes.html', context)
 
@@ -218,9 +322,32 @@ def prize_toggle(request, pk):
 
 # ---------------------------------------------------------------- O'quvchilar
 
+LEAD_SORTS = {
+    'new': ('-created_at',),
+    'old': ('created_at',),
+    'wins': ('-win_count', '-created_at'),
+    'invites': ('-invited_count', '-created_at'),
+}
+
+LEAD_SORT_LABELS = [
+    ('new', "Avval yangilari"),
+    ('old', "Avval eskilari"),
+    ('wins', "Ko'p yutuq olganlar"),
+    ('invites', "Ko'p do'st taklif qilganlar"),
+]
+
+
 def _filter_leads(request, queryset):
-    """Lead ro'yxati va CSV eksport uchun umumiy filtr."""
+    """
+    Lead ro'yxati va CSV eksport uchun umumiy filtr.
+    Returns (queryset, filters_context).
+    """
     query = (request.GET.get('q') or '').strip()
+    wins = (request.GET.get('wins') or '').strip()        # yes | no
+    source = (request.GET.get('source') or '').strip()    # referral | direct
+    inviter = (request.GET.get('inviter') or '').strip()  # yes
+    date_from, date_to, period = _date_range(request)
+    sort = _sort_choice(request, LEAD_SORTS, 'new')
 
     if query:
         queryset = queryset.filter(
@@ -229,41 +356,65 @@ def _filter_leads(request, queryset):
             | Q(phone_number__icontains=query)
             | Q(telegram_id__icontains=query)
         )
-    return queryset, query
+
+    if wins == 'yes':
+        queryset = queryset.filter(win_count__gt=0)
+    elif wins == 'no':
+        queryset = queryset.filter(win_count=0)
+
+    if source == 'referral':
+        queryset = queryset.filter(referrer__isnull=False)
+    elif source == 'direct':
+        queryset = queryset.filter(referrer__isnull=True)
+
+    if inviter == 'yes':
+        queryset = queryset.filter(invited_count__gt=0)
+
+    queryset = _apply_date_range(queryset, 'created_at', date_from, date_to)
+    queryset = queryset.order_by(*LEAD_SORTS[sort])
+
+    filters = {
+        'q': query,
+        'wins': wins,
+        'source': source,
+        'inviter': inviter,
+        'sort': sort,
+        'sort_labels': LEAD_SORT_LABELS,
+        'has_filters': bool(query or wins or source or inviter or date_from or date_to),
+    }
+    filters.update(_date_filter_context(date_from, date_to, period))
+    return queryset, filters
+
+
+def _lead_base_queryset():
+    return StudentLead.objects.select_related('referrer').annotate(
+        win_count=Count('winnings', distinct=True),
+        invited_count=Count('referrals', distinct=True),
+    )
 
 
 @staff_required
 def lead_list(request):
-    base = StudentLead.objects.annotate(
-        win_count=Count('winnings', distinct=True),
-        invited_count=Count('referrals', distinct=True),
-    ).select_related('referrer')
+    leads, filters = _filter_leads(request, _lead_base_queryset())
 
-    leads, query = _filter_leads(request, base)
-
-    paginator = Paginator(leads.order_by('-created_at'), 25)
+    paginator = Paginator(leads, 25)
     page = paginator.get_page(request.GET.get('page'))
 
     context = {
         'active_page': 'leads',
         'page_obj': page,
         'total_found': paginator.count,
-        'q': query,
     }
+    context.update(filters)
     return render(request, 'dashboard/leads.html', context)
 
 
 @staff_required
 def lead_export(request):
     """Filtrlangan o'quvchilar ro'yxatini CSV (Excel) faylga eksport qiladi."""
-    base = (
-        StudentLead.objects
-        .select_related('referrer')
-        .prefetch_related('winnings__prize')
-        # Har bir qator uchun alohida COUNT so'rovi ketmasligi uchun
-        .annotate(invited_count=Count('referrals', distinct=True))
-    )
-    leads, _q = _filter_leads(request, base)
+    # Har bir qator uchun alohida COUNT so'rovi ketmasligi uchun annotate
+    base = _lead_base_queryset().prefetch_related('winnings__prize')
+    leads, _filters = _filter_leads(request, base)
 
     stamp = timezone.localtime(timezone.now()).strftime('%Y-%m-%d_%H-%M')
     # utf-8-sig — Excel o'zbek harflarini to'g'ri ochishi uchun
@@ -277,7 +428,7 @@ def lead_export(request):
         'Yutuqlari', "Ro'yxatdan o'tgan",
     ])
 
-    for lead in leads.order_by('-created_at'):
+    for lead in leads:
         prizes = ', '.join(w.prize.title for w in lead.winnings.all())
         writer.writerow([
             lead.id,
@@ -296,9 +447,36 @@ def lead_export(request):
 
 # ---------------------------------------------------------------- Yutuqlar
 
+WINNING_SORTS = {
+    'new': ('-created_at',),
+    'old': ('created_at',),
+    'expiring': ('expires_at',),
+    'given': ('-used_at',),
+}
+
+WINNING_SORT_LABELS = [
+    ('new', "Avval yangilari"),
+    ('old', "Avval eskilari"),
+    ('expiring', "Muddati yaqinlari"),
+    ('given', "Berilgan vaqti bo'yicha"),
+]
+
+# «Muddati tugayapti» filtri necha kunlik oraliqni tekshiradi
+EXPIRING_SOON_DAYS = 3
+
+
 def _filter_winnings(request, queryset):
+    """
+    Yutuqlar jurnali va CSV eksport uchun umumiy filtr.
+    Returns (queryset, filters_context).
+    """
     query = (request.GET.get('q') or '').strip()
     status_filter = (request.GET.get('status') or '').strip()
+    prize_id = (request.GET.get('prize') or '').strip()
+    rarity = (request.GET.get('rarity') or '').strip()
+    expiring = (request.GET.get('expiring') or '').strip()
+    date_from, date_to, period = _date_range(request)
+    sort = _sort_choice(request, WINNING_SORTS, 'new')
 
     if query:
         queryset = queryset.filter(
@@ -306,29 +484,61 @@ def _filter_winnings(request, queryset):
             | Q(lead__first_name__icontains=query)
             | Q(lead__last_name__icontains=query)
             | Q(lead__phone_number__icontains=query)
+            | Q(lead__telegram_id__icontains=query)
         )
     if status_filter in WinningResult.Status.values:
         queryset = queryset.filter(status=status_filter)
+    if prize_id.isdigit():
+        queryset = queryset.filter(prize_id=int(prize_id))
+    if rarity in Prize.Rarity.values:
+        queryset = queryset.filter(prize__rarity=rarity)
 
-    return queryset, query, status_filter
+    # Yaqin kunlarda muddati tugaydigan, hali olinmagan sovg'alar
+    if expiring == 'yes':
+        now = timezone.now()
+        queryset = queryset.filter(
+            status=WinningResult.Status.ACTIVE,
+            expires_at__gte=now,
+            expires_at__lte=now + timedelta(days=EXPIRING_SOON_DAYS),
+        )
+
+    queryset = _apply_date_range(queryset, 'created_at', date_from, date_to)
+    queryset = queryset.order_by(*WINNING_SORTS[sort])
+
+    filters = {
+        'q': query,
+        'status': status_filter,
+        'prize': prize_id,
+        'rarity': rarity,
+        'expiring': expiring,
+        'sort': sort,
+        'sort_labels': WINNING_SORT_LABELS,
+        'expiring_days': EXPIRING_SOON_DAYS,
+        'status_choices': WinningResult.Status.choices,
+        'rarity_choices': Prize.Rarity.choices,
+        'prizes': Prize.objects.order_by('title').values('id', 'title'),
+        'has_filters': bool(
+            query or status_filter or prize_id or rarity or expiring or date_from or date_to
+        ),
+    }
+    filters.update(_date_filter_context(date_from, date_to, period))
+    return queryset, filters
 
 
 @staff_required
 def winning_list(request):
     base = WinningResult.objects.select_related('lead', 'prize')
-    winnings, query, status_filter = _filter_winnings(request, base)
+    winnings, filters = _filter_winnings(request, base)
 
-    paginator = Paginator(winnings.order_by('-created_at'), 25)
+    paginator = Paginator(winnings, 25)
     page = paginator.get_page(request.GET.get('page'))
 
     context = {
         'active_page': 'winnings',
         'page_obj': page,
         'total_found': paginator.count,
-        'q': query,
-        'status': status_filter,
-        'status_choices': WinningResult.Status.choices,
     }
+    context.update(filters)
     return render(request, 'dashboard/winnings.html', context)
 
 
@@ -366,7 +576,7 @@ def winning_activate(request, pk):
 @staff_required
 def winning_export(request):
     base = WinningResult.objects.select_related('lead', 'prize')
-    winnings, _q, _s = _filter_winnings(request, base)
+    winnings, _filters = _filter_winnings(request, base)
 
     stamp = timezone.localtime(timezone.now()).strftime('%Y-%m-%d_%H-%M')
     response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
@@ -375,16 +585,16 @@ def winning_export(request):
     writer = csv.writer(response, delimiter=';')
     writer.writerow([
         'Promokod', "O'quvchi", 'Telefon',
-        "Sovg'a", 'Rarity', 'Holati', 'Yaratilgan', 'Muddati', 'Ishlatilgan',
+        "Sovg'a", 'Daraja', 'Holati', 'Yaratilgan', 'Muddati', 'Ishlatilgan',
     ])
 
-    for w in winnings.order_by('-created_at'):
+    for w in winnings:
         writer.writerow([
             w.promo_code,
             "{0} {1}".format(w.lead.first_name, w.lead.last_name or '').strip(),
             w.lead.phone_number,
             w.prize.title,
-            w.prize.rarity,
+            w.prize.get_rarity_display(),
             w.get_status_display(),
             timezone.localtime(w.created_at).strftime('%Y-%m-%d %H:%M'),
             timezone.localtime(w.expires_at).strftime('%Y-%m-%d %H:%M'),

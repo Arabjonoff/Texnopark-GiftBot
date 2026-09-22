@@ -390,6 +390,70 @@ select.form-input option { background: var(--bg-panel); color: var(--text); }
 .filter-bar .form-row { flex: 1; min-width: 145px; gap: 0.3rem; }
 .filter-bar .form-row label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
 
+/* Kengaytirilgan filtr paneli */
+.filter-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.95rem 1.05rem;
+  margin-bottom: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 0.75rem;
+}
+
+.filter-grid .form-row { gap: 0.3rem; }
+.filter-grid .form-row label {
+  font-size: 0.68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.filter-grid .form-row.wide { grid-column: span 2; }
+
+.date-pair { display: flex; align-items: center; gap: 0.4rem; }
+.date-pair .form-input { min-width: 0; }
+.date-pair span { color: var(--text-faint); font-size: 0.8rem; }
+
+/* Tezkor davr tugmalari */
+.chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.3rem 0.7rem; border-radius: 999px;
+  font-size: 0.76rem; font-weight: 600;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated); color: var(--text-dim);
+  white-space: nowrap;
+}
+.chip:hover { color: var(--text); border-color: var(--accent); }
+.chip.active {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.55);
+  color: #c7d2fe;
+}
+.chip .ic { width: 14px; height: 14px; }
+
+.filter-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.75rem; flex-wrap: wrap;
+  padding-top: 0.15rem;
+}
+.filter-foot .found { font-size: 0.8rem; color: var(--text-dim); }
+.filter-foot .found b { color: var(--text); font-weight: 700; }
+
+@media (max-width: 820px) {
+  .filter-grid { grid-template-columns: 1fr 1fr; }
+  .filter-grid .form-row.wide { grid-column: 1 / -1; }
+  .filter-foot .row-actions { width: 100%; }
+  .filter-foot .row-actions .btn { flex: 1; }
+}
+
 /* ============================== Progress / bars ============================== */
 
 .bar-row { margin-bottom: 0.85rem; }

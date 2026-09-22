@@ -10,26 +10,77 @@
     <p class="sub">Ro'yxatdan o'tgan o'quvchilar bazasi — {{ total_found }} ta topildi</p>
   </div>
   <div class="page-actions">
-    <a href="{% url 'dashboard-leads-export' %}?q={{ q|urlencode }}" class="btn btn-primary">
+    <a href="{% url 'dashboard-leads-export' %}?{{ request.GET.urlencode }}" class="btn btn-primary">
       <svg class="ic"><use href="#ic-download"/></svg> CSV (Excel) yuklab olish
     </a>
   </div>
 </div>
 
-<form method="get" class="filter-bar">
-  <div class="form-row">
-    <label for="q">Qidiruv</label>
-    <input type="search" id="q" name="q" class="form-input" value="{{ q }}"
-           placeholder="Ism, familiya, telefon yoki Telegram ID">
+<form method="get" class="filter-panel">
+  <div class="filter-grid">
+    <div class="form-row wide">
+      <label for="q">Qidiruv</label>
+      <input type="search" id="q" name="q" class="form-input" value="{{ q }}"
+             placeholder="Ism, familiya, telefon yoki Telegram ID">
+    </div>
+
+    <div class="form-row">
+      <label for="wins">Yutug'i</label>
+      <select name="wins" id="wins" class="form-input">
+        <option value="">Farqi yo'q</option>
+        <option value="yes" {% if wins == 'yes' %}selected{% endif %}>Yutug'i bor</option>
+        <option value="no" {% if wins == 'no' %}selected{% endif %}>Yutug'i yo'q</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="source">Qanday kelgan</label>
+      <select name="source" id="source" class="form-input">
+        <option value="">Farqi yo'q</option>
+        <option value="referral" {% if source == 'referral' %}selected{% endif %}>Do'st taklifi bilan</option>
+        <option value="direct" {% if source == 'direct' %}selected{% endif %}>O'zi kelgan</option>
+      </select>
+    </div>
+
+    {% include 'dashboard/_filter_dates.html' %}
+
+    <div class="form-row">
+      <label for="sort">Saralash</label>
+      <select name="sort" id="sort" class="form-input">
+        {% for value, label in sort_labels %}
+          <option value="{{ value }}" {% if value == sort %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
   </div>
 
-  <div class="row-actions">
-    <button type="submit" class="btn btn-primary">
-      <svg class="ic"><use href="#ic-search"/></svg> Filtrlash
+  <div class="chip-row">
+    <button type="submit" name="period" value="" class="chip {% if not period %}active{% endif %}">Butun davr</button>
+    {% for value, label in period_presets %}
+      <button type="submit" name="period" value="{{ value }}"
+              class="chip {% if period == value %}active{% endif %}">{{ label }}</button>
+    {% endfor %}
+
+    <button type="submit" name="inviter" value="{% if inviter == 'yes' %}{% else %}yes{% endif %}"
+            class="chip {% if inviter == 'yes' %}active{% endif %}"
+            title="Kamida bitta do'stini taklif qilganlar">
+      <svg class="ic"><use href="#ic-users"/></svg>
+      Do'st taklif qilganlar
     </button>
-    {% if q %}
-      <a href="{% url 'dashboard-leads' %}" class="btn">Tozalash</a>
-    {% endif %}
+  </div>
+
+  <div class="filter-foot">
+    <span class="found"><b>{{ total_found }}</b> ta o'quvchi topildi</span>
+    <div class="row-actions">
+      <button type="submit" class="btn btn-primary">
+        <svg class="ic"><use href="#ic-search"/></svg> Qo'llash
+      </button>
+      {% if has_filters %}
+        <a href="{% url 'dashboard-leads' %}" class="btn">
+          <svg class="ic"><use href="#ic-x"/></svg> Tozalash
+        </a>
+      {% endif %}
+    </div>
   </div>
 </form>
 
@@ -92,7 +143,7 @@
   {% else %}
     <div class="empty">
       <span class="icon"><svg class="ic"><use href="#ic-users"/></svg></span>
-      {% if q %}
+      {% if has_filters %}
         Filtrga mos o'quvchi topilmadi.
         <div style="margin-top:.9rem">
           <a href="{% url 'dashboard-leads' %}" class="btn btn-sm">Filtrni tozalash</a>

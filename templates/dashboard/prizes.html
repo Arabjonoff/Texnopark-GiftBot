@@ -28,9 +28,72 @@
   </div>
 {% endif %}
 
+<form method="get" class="filter-panel">
+  <div class="filter-grid">
+    <div class="form-row wide">
+      <label for="q">Qidiruv</label>
+      <input type="search" id="q" name="q" class="form-input" value="{{ q }}"
+             placeholder="Sovg'a nomi yoki olish manzili">
+    </div>
+
+    <div class="form-row">
+      <label for="rarity">Daraja</label>
+      <select name="rarity" id="rarity" class="form-input">
+        <option value="">Barchasi</option>
+        {% for value, label in rarity_choices %}
+          <option value="{{ value }}" {% if value == rarity %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="category">Kategoriya</label>
+      <select name="category" id="category" class="form-input">
+        <option value="">Barchasi</option>
+        <option value="none" {% if category == 'none' %}selected{% endif %}>Kategoriyasiz</option>
+        {% for cat in categories %}
+          <option value="{{ cat.id }}" {% if category == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="state">Holati</label>
+      <select name="state" id="state" class="form-input">
+        <option value="">Barchasi</option>
+        <option value="active" {% if state == 'active' %}selected{% endif %}>Aktiv</option>
+        <option value="off" {% if state == 'off' %}selected{% endif %}>O'chiq</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="sort">Saralash</label>
+      <select name="sort" id="sort" class="form-input">
+        {% for value, label in sort_labels %}
+          <option value="{{ value }}" {% if value == sort %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="filter-foot">
+    <span class="found"><b>{{ total_found }}</b> ta sovg'a topildi</span>
+    <div class="row-actions">
+      <button type="submit" class="btn btn-primary">
+        <svg class="ic"><use href="#ic-search"/></svg> Qo'llash
+      </button>
+      {% if has_filters %}
+        <a href="{% url 'dashboard-prizes' %}" class="btn">
+          <svg class="ic"><use href="#ic-x"/></svg> Tozalash
+        </a>
+      {% endif %}
+    </div>
+  </div>
+</form>
+
 <div class="panel">
   <div class="panel-title">
-    <span>Barcha sovg'alar ({{ prizes|length }})</span>
+    <span>Sovg'alar ro'yxati</span>
     <span class="hint">
       Aktiv og'irliklar yig'indisi: <b style="color:var(--text)">{{ prob.total_weight }}</b>
       — foizlar shu yig'indiga nisbatan hisoblanadi
@@ -132,10 +195,17 @@
   {% else %}
     <div class="empty">
       <span class="icon"><svg class="ic"><use href="#ic-gift"/></svg></span>
-      Hali sovg'a qo'shilmagan.
-      <div style="margin-top:.9rem">
-        <a href="{% url 'dashboard-prize-create' %}" class="btn btn-primary btn-sm">Birinchi sovg'ani qo'shish</a>
-      </div>
+      {% if has_filters %}
+        Filtrga mos sovg'a topilmadi.
+        <div style="margin-top:.9rem">
+          <a href="{% url 'dashboard-prizes' %}" class="btn btn-sm">Filtrni tozalash</a>
+        </div>
+      {% else %}
+        Hali sovg'a qo'shilmagan.
+        <div style="margin-top:.9rem">
+          <a href="{% url 'dashboard-prize-create' %}" class="btn btn-primary btn-sm">Birinchi sovg'ani qo'shish</a>
+        </div>
+      {% endif %}
     </div>
   {% endif %}
 </div>

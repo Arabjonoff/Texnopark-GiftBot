@@ -13,37 +13,90 @@
     <a href="{% url 'dashboard-scan' %}" class="btn">
       <svg class="ic"><use href="#ic-scan"/></svg> QR Skaner
     </a>
-    <a href="{% url 'dashboard-winnings-export' %}?q={{ q|urlencode }}&status={{ status|urlencode }}"
-       class="btn btn-primary">
+    <a href="{% url 'dashboard-winnings-export' %}?{{ request.GET.urlencode }}" class="btn btn-primary">
       <svg class="ic"><use href="#ic-download"/></svg> CSV yuklab olish
     </a>
   </div>
 </div>
 
-<form method="get" class="filter-bar">
-  <div class="form-row">
-    <label for="q">Qidiruv</label>
-    <input type="search" id="q" name="q" class="form-input" value="{{ q }}"
-           placeholder="Promokod, ism yoki telefon">
+<form method="get" class="filter-panel">
+  <div class="filter-grid">
+    <div class="form-row wide">
+      <label for="q">Qidiruv</label>
+      <input type="search" id="q" name="q" class="form-input" value="{{ q }}"
+             placeholder="Promokod, ism, telefon yoki Telegram ID">
+    </div>
+
+    <div class="form-row">
+      <label for="status">Holati</label>
+      <select name="status" id="status" class="form-input">
+        <option value="">Barchasi</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="prize">Sovg'a</label>
+      <select name="prize" id="prize" class="form-input">
+        <option value="">Barchasi</option>
+        {% for p in prizes %}
+          <option value="{{ p.id }}" {% if prize == p.id|stringformat:"s" %}selected{% endif %}>{{ p.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="rarity">Daraja</label>
+      <select name="rarity" id="rarity" class="form-input">
+        <option value="">Barchasi</option>
+        {% for value, label in rarity_choices %}
+          <option value="{{ value }}" {% if value == rarity %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% include 'dashboard/_filter_dates.html' %}
+
+    <div class="form-row">
+      <label for="sort">Saralash</label>
+      <select name="sort" id="sort" class="form-input">
+        {% for value, label in sort_labels %}
+          <option value="{{ value }}" {% if value == sort %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
   </div>
 
-  <div class="form-row" style="flex:0 0 190px">
-    <label for="status">Holati</label>
-    <select name="status" id="status" class="form-input">
-      <option value="">Barchasi</option>
-      {% for value, label in status_choices %}
-        <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </div>
+  {# Tezkor tanlovlar — bosilganda formaning o'zi yuboriladi #}
+  <div class="chip-row">
+    <button type="submit" name="period" value="" class="chip {% if not period %}active{% endif %}">Butun davr</button>
+    {% for value, label in period_presets %}
+      <button type="submit" name="period" value="{{ value }}"
+              class="chip {% if period == value %}active{% endif %}">{{ label }}</button>
+    {% endfor %}
 
-  <div class="row-actions">
-    <button type="submit" class="btn btn-primary">
-      <svg class="ic"><use href="#ic-search"/></svg> Filtrlash
+    <button type="submit" name="expiring" value="{% if expiring == 'yes' %}{% else %}yes{% endif %}"
+            class="chip {% if expiring == 'yes' %}active{% endif %}"
+            title="{{ expiring_days }} kun ichida muddati tugaydigan, hali olinmagan sovg'alar">
+      <svg class="ic"><use href="#ic-clock"/></svg>
+      Muddati tugayapti
     </button>
-    {% if q or status %}
-      <a href="{% url 'dashboard-winnings' %}" class="btn">Tozalash</a>
-    {% endif %}
+  </div>
+
+  <div class="filter-foot">
+    <span class="found"><b>{{ total_found }}</b> ta yutuq topildi</span>
+    <div class="row-actions">
+      <button type="submit" class="btn btn-primary">
+        <svg class="ic"><use href="#ic-search"/></svg> Qo'llash
+      </button>
+      {% if has_filters %}
+        <a href="{% url 'dashboard-winnings' %}" class="btn">
+          <svg class="ic"><use href="#ic-x"/></svg> Tozalash
+        </a>
+      {% endif %}
+    </div>
   </div>
 </form>
 
@@ -136,7 +189,7 @@
   {% else %}
     <div class="empty">
       <span class="icon"><svg class="ic"><use href="#ic-trophy"/></svg></span>
-      {% if q or status %}
+      {% if has_filters %}
         Filtrga mos yutuq topilmadi.
         <div style="margin-top:.9rem">
           <a href="{% url 'dashboard-winnings' %}" class="btn btn-sm">Filtrni tozalash</a>
