@@ -19,7 +19,8 @@ from app_main.services import (
     calculate_weighted_prize,
     check_user_spin_status,
     generate_unique_promo_code,
-    get_spinnable_prizes
+    get_spinnable_prizes,
+    REFERRALS_PER_SPIN,
 )
 
 
@@ -49,7 +50,8 @@ class ValidateInitDataView(APIView):
             "available_spins": available_spins,
             "winnings": winnings_data,
             "referral_link": referral_link,
-            "invited_count": invited_count
+            "invited_count": invited_count,
+            "referrals_per_spin": REFERRALS_PER_SPIN,
         }, status=status.HTTP_200_OK)
 
 
@@ -166,7 +168,9 @@ class ClaimPrizeView(APIView):
             "winning_result": WinningResultSerializer(winning).data,
             "available_spins": updated_spins,
             "winnings": WinningResultSerializer(updated_winnings, many=True).data,
-            "referral_link": referral_link
+            "referral_link": referral_link,
+            "invited_count": updated_lead.referrals.count(),
+            "referrals_per_spin": REFERRALS_PER_SPIN,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -202,7 +206,8 @@ class MyPrizeView(APIView):
             "available_spins": available_spins,
             "winnings": winnings_data,
             "referral_link": referral_link,
-            "invited_count": invited_count
+            "invited_count": invited_count,
+            "referrals_per_spin": REFERRALS_PER_SPIN,
         }, status=status.HTTP_200_OK)
 
 

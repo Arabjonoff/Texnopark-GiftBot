@@ -585,6 +585,38 @@ body {
   color: #cbd5e1;
 }
 
+.referral-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.referral-progress-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+}
+
+.referral-progress-head b {
+  color: #fbbf24;
+  font-weight: 800;
+}
+
+.referral-progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.9);
+  overflow: hidden;
+}
+
+.referral-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8b5cf6, #ec4899);
+  transition: width 0.4s ease;
+}
+
 .referral-input-box {
   display: flex;
   gap: 0.5rem;

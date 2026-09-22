@@ -52,6 +52,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnShareTg = document.getElementById('btn-share-tg');
   const invitedCountBadge = document.getElementById('invited-count-badge');
   const spinsCountBadge = document.getElementById('spins-count-badge');
+  const refProgressText = document.getElementById('ref-progress-text');
+  const refProgressFill = document.getElementById('ref-progress-fill');
 
   // Tab 2 — Yutuqlar tarixi
   const historyList = document.getElementById('history-list');
@@ -226,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
         userReferralLink = data.referral_link || 'https://t.me/texnogiftbot';
 
         updateSpinButtonUI();
-        updateReferralHub(userReferralLink, data.invited_count || 0, userAvailableSpins);
+        updateReferralHub(userReferralLink, data.invited_count || 0, userAvailableSpins, data.referrals_per_spin);
         renderHistory(data.winnings || []);
 
         if (data.user_info) {
@@ -271,10 +273,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function updateReferralHub(refLink, invitedCount, spinsCount) {
+  function updateReferralHub(refLink, invitedCount, spinsCount, perSpin) {
     if (refLinkInput) refLinkInput.value = refLink;
     if (invitedCountBadge) invitedCountBadge.innerText = invitedCount;
     if (spinsCountBadge) spinsCountBadge.innerText = spinsCount;
+
+    // Har perSpin ta do'st = +1 aylantirish; progress keyingi bonusgacha
+    const step = perSpin || 3;
+    const progress = invitedCount % step;
+    if (refProgressText) refProgressText.innerText = `${progress}/${step}`;
+    if (refProgressFill) refProgressFill.style.width = `${(progress / step) * 100}%`;
   }
 
   // ---------------------------------------------------------------- Spin
@@ -430,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
         userReferralLink = data.referral_link || userReferralLink;
 
         updateSpinButtonUI();
-        updateReferralHub(userReferralLink, data.invited_count || 0, userAvailableSpins);
+        updateReferralHub(userReferralLink, data.invited_count || 0, userAvailableSpins, data.referrals_per_spin);
         renderHistory(data.winnings || []);
 
         // Yangi yutuq g'oliblar ro'yxatiga ham qo'shildi — keyingi ochilishda yangilansin

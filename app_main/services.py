@@ -5,6 +5,7 @@ import random
 import string
 from urllib.parse import parse_qsl, unquote
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from app_main.models import Prize, StudentLead, WinningResult
@@ -124,27 +125,55 @@ def check_user_spin_status(telegram_id: int) -> tuple[int, StudentLead | None, l
     return available_spins, lead, winnings
 
 
-def process_referral(referrer_tg_id: int, new_user_tg_id: int) -> tuple[bool, StudentLead | None]:
-    """
-    Grants +1 extra spin to referrer when a new user joins via ref_123456789.
-    """
-    if not referrer_tg_id or referrer_tg_id == new_user_tg_id:
-        return False, None
+# Har nechta taklif qilingan do'st uchun +1 aylantirish beriladi
+REFERRALS_PER_SPIN = 3
 
-    referrer_lead = StudentLead.objects.filter(telegram_id=referrer_tg_id).first()
-    if not referrer_lead:
-        # Create lead shell for referrer if they haven't submitted lead form yet
-        referrer_lead = StudentLead.objects.create(
+
+def referral_progress(invited_count: int) -> int:
+    """Keyingi bonus spingacha yig'ilgan do'stlar soni (0..REFERRALS_PER_SPIN-1)."""
+    return invited_count % REFERRALS_PER_SPIN
+
+
+def process_referral(
+    referrer_tg_id: int,
+    new_user_tg_id: int,
+    new_user_first_name: str = '',
+) -> tuple[bool, StudentLead | None, bool]:
+    """
+    ref_123456789 havolasi orqali kirgan yangi foydalanuvchini taklif
+    qiluvchiga bog'laydi. Har REFERRALS_PER_SPIN ta do'st uchun +1 spin.
+
+    Faqat botga birinchi marta kirayotgan foydalanuvchi hisoblanadi —
+    aks holda bitta odam havolani qayta bosib cheksiz spin yig'ib olardi.
+
+    Returns (success, referrer_lead, spin_awarded).
+    """
+    if not referrer_tg_id or not new_user_tg_id or referrer_tg_id == new_user_tg_id:
+        return False, None, False
+
+    with transaction.atomic():
+        if StudentLead.objects.filter(telegram_id=new_user_tg_id).exists():
+            return False, None, False
+
+        referrer_lead, _ = StudentLead.objects.select_for_update().get_or_create(
             telegram_id=referrer_tg_id,
-            first_name="Foydalanuvchi",
-            phone_number="",
-            extra_spins=1
+            # Taklif qiluvchi hali forma to'ldirmagan bo'lsa — vaqtinchalik yozuv
+            defaults={'first_name': "Foydalanuvchi", 'phone_number': ""},
         )
-    else:
-        referrer_lead.extra_spins += 1
-        referrer_lead.save()
 
-    return True, referrer_lead
+        StudentLead.objects.create(
+            telegram_id=new_user_tg_id,
+            first_name=new_user_first_name or "Foydalanuvchi",
+            phone_number="",
+            referrer=referrer_lead,
+        )
+
+        spin_awarded = referrer_lead.referrals.count() % REFERRALS_PER_SPIN == 0
+        if spin_awarded:
+            referrer_lead.extra_spins += 1
+            referrer_lead.save(update_fields=['extra_spins'])
+
+    return True, referrer_lead, spin_awarded
 
 
 def generate_unique_promo_code() -> str:

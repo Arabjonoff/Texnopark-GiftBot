@@ -11,7 +11,13 @@ from telegram import (
 )
 from telegram.ext import CommandHandler, ContextTypes
 
-from app_main.services import check_user_spin_status, process_referral
+from app_main.models import StudentLead
+from app_main.services import (
+    REFERRALS_PER_SPIN,
+    check_user_spin_status,
+    process_referral,
+    referral_progress,
+)
 from bot.utils import get_webapp_url
 
 logger = logging.getLogger(__name__)
@@ -48,6 +54,39 @@ def get_user_winnings(telegram_id: int):
     return available_spins, rows
 
 
+@sync_to_async(thread_sensitive=True)
+def get_invited_count(telegram_id: int) -> int:
+    return StudentLead.objects.filter(referrer__telegram_id=telegram_id).count()
+
+
+async def notify_referrer(context: ContextTypes.DEFAULT_TYPE, referrer_tg_id: int, spin_awarded: bool):
+    """Taklif qiluvchiga yangi do'st qo'shilgani va progress haqida xabar."""
+    if spin_awarded:
+        text = (
+            f"🎉 **{REFERRALS_PER_SPIN} ta do'stingiz qo'shildi!**\n\n"
+            f"Sizga barabanni aylantirish uchun **+1 imkoniyat** berildi. "
+            f"Omadingizni sinab ko'ring!"
+        )
+    else:
+        progress = referral_progress(await get_invited_count(referrer_tg_id))
+        text = (
+            f"👥 Do'stingiz havolangiz orqali qo'shildi!\n\n"
+            f"Progress: **{progress}/{REFERRALS_PER_SPIN}** — yana "
+            f"{REFERRALS_PER_SPIN - progress} ta do'st taklif qiling va "
+            f"**+1 aylantirish** oling."
+        )
+
+    reply_markup, _ = _webapp_keyboard()
+    try:
+        await context.bot.send_message(
+            chat_id=referrer_tg_id, text=text,
+            reply_markup=reply_markup, parse_mode="Markdown"
+        )
+    except Exception as e:
+        # Foydalanuvchi botni bloklagan yoki hali /start bosmagan bo'lishi mumkin
+        logger.warning("Could not notify referrer %s: %s", referrer_tg_id, e)
+
+
 def _webapp_keyboard(extra_rows=None):
     """
     Asosiy tugmalar. Telegram WebApp tugmasi faqat https:// manzil bilan
@@ -78,12 +117,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if arg.startswith("ref_"):
             try:
                 referrer_tg_id = int(arg.split("ref_")[1])
-                success, _referrer_lead = await process_referral_async(referrer_tg_id, new_user_id)
+                success, _referrer_lead, spin_awarded = await process_referral_async(
+                    referrer_tg_id, new_user_id, new_user.first_name if new_user else ''
+                )
                 if success:
                     logger.info(
-                        "Referral processed: %s gained +1 extra spin from %s",
-                        referrer_tg_id, new_user_id
+                        "Referral processed: %s invited %s (spin awarded: %s)",
+                        referrer_tg_id, new_user_id, spin_awarded
                     )
+                    await notify_referrer(context, referrer_tg_id, spin_awarded)
             except Exception as e:
                 logger.error("Failed to process referral: %s", e)
 
@@ -186,7 +228,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "3️⃣ «Yutuqlarim» bo'limidan QR-kodni oching — uning ostida "
         "sovg'ani olish manzili ko'rsatiladi.\n"
         "4️⃣ Texnopark xodimiga QR-kodni ko'rsating.\n\n"
-        "Har bir taklif qilgan do'stingiz uchun **+1 aylantirish** olasiz.\n\n"
+        f"Har {REFERRALS_PER_SPIN} ta taklif qilgan do'stingiz uchun **+1 aylantirish** olasiz.\n\n"
         "Buyruqlar:\n"
         "/start — barabanni ochish\n"
         "/yutuqlarim — yutuqlar va manzillar\n"

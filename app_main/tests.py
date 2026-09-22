@@ -37,14 +37,34 @@ class TexnoparkMiniAppApiTests(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data['available_spins'], 1)
 
-        # 2. Process referral from user 999888777 inviting new user 555666777
-        success, ref_lead = process_referral(999888777, 555666777)
-        self.assertTrue(success)
+        # 2. First two friends join — no bonus yet, only progress
+        for friend_id in (555666771, 555666772):
+            success, ref_lead, awarded = process_referral(999888777, friend_id)
+            self.assertTrue(success)
+            self.assertFalse(awarded)
+        self.assertEqual(ref_lead.extra_spins, 0)
+
+        resp_mid = self.client.post(val_url, {'init_data': self.mock_init_data}, format='json')
+        self.assertEqual(resp_mid.data['available_spins'], 1)
+        self.assertEqual(resp_mid.data['invited_count'], 2)
+
+        # 3. Third friend joins -> +1 spin
+        success, ref_lead, awarded = process_referral(999888777, 555666773)
+        self.assertTrue(awarded)
         self.assertEqual(ref_lead.extra_spins, 1)
 
-        # 3. Check updated status for 999888777 -> now has 2 available spins!
         resp2 = self.client.post(val_url, {'init_data': self.mock_init_data}, format='json')
         self.assertEqual(resp2.data['available_spins'], 2)
+        self.assertEqual(resp2.data['invited_count'], 3)
+
+    def test_referral_same_friend_counted_once(self):
+        # Havolani qayta bosish yoki o'zini taklif qilish hisoblanmaydi
+        self.assertTrue(process_referral(999888777, 555666771)[0])
+        self.assertFalse(process_referral(999888777, 555666771)[0])
+        self.assertFalse(process_referral(999888777, 999888777)[0])
+        # Allaqachon ro'yxatda bo'lgan foydalanuvchi boshqa odamning havolasi bilan ham hisoblanmaydi
+        self.assertFalse(process_referral(111222333, 555666771)[0])
+        self.assertEqual(StudentLead.objects.get(telegram_id=999888777).referrals.count(), 1)
 
     def test_claim_prize_and_spin_limits(self):
         claim_url = reverse('api-claim-prize')
