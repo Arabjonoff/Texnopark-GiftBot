@@ -1,0 +1,166 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}{% if is_edit %}Kategoriyani tahrirlash{% else %}Yangi kategoriya{% endif %}{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>{% if is_edit %}Kategoriyani tahrirlash{% else %}Yangi kategoriya{% endif %}</h2>
+    <p class="sub">
+      {% if is_edit %}«{{ category.title }}» ma'lumotlarini o'zgartirish{% else %}Sovg'alarni guruhlash uchun yangi kategoriya{% endif %}
+    </p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'dashboard-categories' %}" class="btn">← Ro'yxatga qaytish</a>
+  </div>
+</div>
+
+{% if form.non_field_errors %}
+  <div class="messages">
+    {% for error in form.non_field_errors %}
+      <div class="msg error"><span>⛔</span><span>{{ error }}</span></div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+
+  <div class="grid-2">
+
+    <!-- ============ Chap ustun ============ -->
+    <div class="panel">
+      <div class="panel-title">Asosiy ma'lumotlar</div>
+
+      <div class="form-grid">
+
+        <div class="form-row full">
+          <label for="{{ form.title.id_for_label }}">Kategoriya nomi *</label>
+          {{ form.title }}
+          {% for error in form.title.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          <span class="help">Masalan: «Chegirmalar», «Mahorat darslari», «Suvenirlar».</span>
+        </div>
+
+        <div class="form-row full">
+          <label for="{{ form.description.id_for_label }}">Tavsifi</label>
+          {{ form.description }}
+          {% for error in form.description.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          <span class="help">Ixtiyoriy. Faqat admin panelda ko'rinadi.</span>
+        </div>
+
+        <div class="form-row">
+          <label for="{{ form.sort_order.id_for_label }}">Tartib raqami</label>
+          {{ form.sort_order }}
+          {% for error in form.sort_order.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          <span class="help">Kichik raqam ro'yxatda yuqorida turadi.</span>
+        </div>
+
+        <div class="form-row">
+          <label>Holati</label>
+          <div class="check-row" style="padding-top:.45rem">
+            {{ form.is_active }}
+            <label for="{{ form.is_active.id_for_label }}">Aktiv</label>
+          </div>
+          <span class="help">
+            O'chirilsa bu kategoriyadagi sovg'alar barabanda qatnashmaydi.
+            {% if is_edit and prize_count %}
+              Hozir bu kategoriyada <b>{{ prize_count }}</b> ta sovg'a bor.
+            {% endif %}
+          </span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============ O'ng ustun: rasm / ikonka ============ -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>Rasm yoki ikonka</span>
+        <span class="hint">ixtiyoriy</span>
+      </div>
+
+      <div class="img-preview" id="img-preview">
+        {% if is_edit and category.display_image %}
+          <img src="{{ category.display_image }}" alt="{{ category.title }}"
+               onerror="this.parentNode.innerHTML='<div class=&quot;ph&quot;>Rasm topilmadi</div>'">
+        {% else %}
+          <div class="ph">
+            Rasm tanlanmagan<br>
+            <small>Bo'sh qoldirsangiz quyidagi emoji ishlatiladi</small>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="form-row" style="margin-top:1rem">
+        <label for="{{ form.image.id_for_label }}">Fayl yuklash</label>
+        {{ form.image }}
+        {% for error in form.image.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        <span class="help">PNG, JPG, WEBP yoki GIF. Hajmi 5 MB gacha.</span>
+      </div>
+
+      {% if is_edit and category.image %}
+        <div class="help" style="margin-top:.5rem">
+          Joriy fayl: <span class="mono">{{ category.image.name }}</span>
+        </div>
+        <div class="check-row" style="margin-top:.6rem">
+          {{ form.clear_image }}
+          <label for="{{ form.clear_image.id_for_label }}">Yuklangan rasmni o'chirish</label>
+        </div>
+      {% endif %}
+
+      <div class="form-row" style="margin-top:1rem">
+        <label for="{{ form.icon.id_for_label }}">Ikonka (emoji)</label>
+        {{ form.icon }}
+        {% for error in form.icon.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        <span class="help">Rasm yuklamasangiz shu emoji ko'rinadi. Bo'sh qolsa 📦 ishlatiladi.</span>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">
+      {% if is_edit %}💾 Saqlash{% else %}+ Qo'shish{% endif %}
+    </button>
+    <a href="{% url 'dashboard-categories' %}" class="btn">Bekor qilish</a>
+  </div>
+
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Fayl tanlanganda darhol oldindan ko'rsatish
+  (function () {
+    var input = document.getElementById('{{ form.image.id_for_label }}');
+    var box = document.getElementById('img-preview');
+    if (!input || !box) return;
+
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+
+      if (!/^image\//.test(file.type)) {
+        box.innerHTML = '<div class="ph" style="color:#f87171">Bu rasm fayli emas</div>';
+        return;
+      }
+
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        box.innerHTML = '';
+        var img = document.createElement('img');
+        img.src = e.target.result;
+        img.alt = 'Tanlangan rasm';
+        box.appendChild(img);
+      };
+      reader.onerror = function () {
+        box.innerHTML = '<div class="ph" style="color:#f87171">Faylni o\'qib bo\'lmadi</div>';
+      };
+      reader.readAsDataURL(file);
+    });
+  })();
+</script>
+{% endblock %}

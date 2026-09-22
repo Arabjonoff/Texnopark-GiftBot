@@ -1,0 +1,64 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Kirish — Yoshlar Texnoparki Admin</title>
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-card">
+
+    <div class="brand">
+      <div class="brand-logo">YT</div>
+      <div>
+        <h1>Admin Dashboard</h1>
+        <p style="color:var(--text-faint);font-size:.78rem;margin-top:.2rem">
+          Yoshlar Texnoparki
+        </p>
+      </div>
+    </div>
+
+    {% if messages %}
+      <div class="messages">
+        {% for message in messages %}
+          <div class="msg {{ message.tags }}">
+            <span>⛔</span><span>{{ message }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" autocomplete="off">
+      {% csrf_token %}
+
+      <div class="form-row">
+        <label for="username">Login</label>
+        <input type="text" id="username" name="username" class="form-input"
+               placeholder="admin" required autofocus>
+      </div>
+
+      <div class="form-row">
+        <label for="password">Parol</label>
+        <input type="password" id="password" name="password" class="form-input"
+               placeholder="••••••••" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block" style="margin-top:1.2rem">
+        Kirish
+      </button>
+    </form>
+
+    <p style="text-align:center;color:var(--text-faint);font-size:.73rem;margin-top:1.3rem;line-height:1.5">
+      Faqat admin huquqiga ega xodimlar uchun.
+    </p>
+
+  </div>
+</div>
+
+</body>
+</html>

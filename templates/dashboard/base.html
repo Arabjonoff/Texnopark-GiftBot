@@ -1,0 +1,119 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}Admin Dashboard{% endblock %} — Yoshlar Texnoparki</title>
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+
+<button class="menu-toggle" id="menu-toggle" type="button" aria-label="Menyu">☰</button>
+<div class="backdrop" id="backdrop"></div>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-logo">YT</div>
+      <div>
+        <h1>Yoshlar Texnoparki</h1>
+        <p>Admin Dashboard</p>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-label">Asosiy</div>
+      <a href="{% url 'dashboard-index' %}" class="nav-item {% if active_page == 'index' %}active{% endif %}">
+        <span class="nav-icon">📊</span> Statistika
+      </a>
+      <a href="{% url 'dashboard-prizes' %}" class="nav-item {% if active_page == 'prizes' %}active{% endif %}">
+        <span class="nav-icon">🎁</span> Sovg'alar
+      </a>
+      <a href="{% url 'dashboard-categories' %}" class="nav-item {% if active_page == 'categories' %}active{% endif %}">
+        <span class="nav-icon">📦</span> Kategoriyalar
+      </a>
+
+      <div class="nav-label">Ma'lumotlar</div>
+      <a href="{% url 'dashboard-leads' %}" class="nav-item {% if active_page == 'leads' %}active{% endif %}">
+        <span class="nav-icon">👥</span> O'quvchilar
+      </a>
+      <a href="{% url 'dashboard-winnings' %}" class="nav-item {% if active_page == 'winnings' %}active{% endif %}">
+        <span class="nav-icon">🏆</span> Yutuqlar
+      </a>
+
+      <div class="nav-label">Amallar</div>
+      <a href="{% url 'dashboard-scan' %}" class="nav-item {% if active_page == 'scan' %}active{% endif %}">
+        <span class="nav-icon">📷</span> QR Skaner
+      </a>
+      <a href="/admin/" class="nav-item" target="_blank" rel="noopener">
+        <span class="nav-icon">⚙️</span> Django Admin
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <div class="avatar">{{ user.username|first|upper }}</div>
+        <div style="min-width:0">
+          <div class="uname">{{ user.username }}</div>
+          <div class="urole">{% if user.is_superuser %}Superadmin{% else %}Xodim{% endif %}</div>
+        </div>
+      </div>
+      <a href="{% url 'dashboard-account-password' %}"
+         class="btn btn-sm btn-block {% if active_page == 'account' %}btn-primary{% endif %}"
+         style="margin-top:.4rem">
+        🔑 Parolni o'zgartirish
+      </a>
+      <a href="{% url 'dashboard-logout' %}" class="btn btn-sm btn-block" style="margin-top:.4rem">
+        Chiqish
+      </a>
+    </div>
+  </aside>
+
+  <main class="main">
+    {% if messages %}
+      <div class="messages">
+        {% for message in messages %}
+          <div class="msg {{ message.tags }}">
+            <span>{% if message.tags == 'success' %}✅{% elif message.tags == 'error' %}⛔{% else %}ℹ️{% endif %}</span>
+            <span>{{ message }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+</div>
+
+<script>
+  (function () {
+    var toggle = document.getElementById('menu-toggle');
+    var sidebar = document.getElementById('sidebar');
+    var backdrop = document.getElementById('backdrop');
+
+    function closeMenu() {
+      sidebar.classList.remove('open');
+      backdrop.classList.remove('show');
+    }
+
+    if (toggle) {
+      toggle.addEventListener('click', function () {
+        sidebar.classList.toggle('open');
+        backdrop.classList.toggle('show');
+      });
+    }
+    if (backdrop) backdrop.addEventListener('click', closeMenu);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeMenu();
+    });
+  })();
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

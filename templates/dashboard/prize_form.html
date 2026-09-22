@@ -1,0 +1,321 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}{% if is_edit %}Sovg'ani tahrirlash{% else %}Yangi sovg'a{% endif %}{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>{% if is_edit %}Sovg'ani tahrirlash{% else %}Yangi sovg'a{% endif %}</h2>
+    <p class="sub">
+      {% if is_edit %}«{{ prize.title }}» ma'lumotlarini o'zgartirish{% else %}Baraban lentasiga yangi sovg'a qo'shish{% endif %}
+    </p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'dashboard-prizes' %}" class="btn">← Ro'yxatga qaytish</a>
+  </div>
+</div>
+
+{% if form.non_field_errors %}
+  <div class="messages">
+    {% for error in form.non_field_errors %}
+      <div class="msg error"><span>⛔</span><span>{{ error }}</span></div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+
+  <div class="grid-2">
+
+    <!-- ============ Chap ustun: asosiy maydonlar ============ -->
+    <div class="panel">
+      <div class="panel-title">Asosiy ma'lumotlar</div>
+
+      <div class="form-grid">
+
+        <div class="form-row full">
+          <label for="{{ form.title.id_for_label }}">Sovg'a nomi *</label>
+          {{ form.title }}
+          {% for error in form.title.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          <span class="help">Baraban kartochkasida ko'rinadigan nom. Masalan: «10% Chegirma».</span>
+        </div>
+
+        <div class="form-row full">
+          <label for="{{ form.category.id_for_label }}">Kategoriyasi</label>
+          {{ form.category }}
+          {% for error in form.category.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          <span class="help">
+            Ixtiyoriy — guruhlash uchun.
+            <a href="{% url 'dashboard-categories' %}" style="text-decoration:underline">Kategoriyalarni boshqarish</a>
+          </span>
+        </div>
+
+        <div class="form-row">
+          <label for="{{ form.rarity.id_for_label }}">Kamyoblik darajasi *</label>
+          {{ form.rarity }}
+          {% for error in form.rarity.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          <span class="help">Kartochka rangi va glow effektini belgilaydi.</span>
+        </div>
+
+        <div class="form-row">
+          <label for="{{ form.probability.id_for_label }}">Ehtimollik og'irligi *</label>
+          {{ form.probability }}
+          {% for error in form.probability.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          <span class="help">
+            Bu foiz emas, <b>og'irlik</b>. Real ehtimollik: og'irlik ÷ barcha aktiv og'irliklar yig'indisi.
+          </span>
+        </div>
+
+        <div class="form-row">
+          <label for="{{ form.valid_days.id_for_label }}">Amal qilish muddati (kun) *</label>
+          {{ form.valid_days }}
+          {% for error in form.valid_days.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          <span class="help">Yutuq shu muncha kundan keyin avtomatik EXPIRED bo'ladi.</span>
+        </div>
+
+        <div class="form-row">
+          <label>Holati</label>
+          <div class="check-row" style="padding-top:.45rem">
+            {{ form.is_active }}
+            <label for="{{ form.is_active.id_for_label }}">Aktiv (barabanda qatnashadi)</label>
+          </div>
+          <span class="help">O'chirilsa lentada ko'rinmaydi va yutuq sifatida chiqmaydi.</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============ O'ng ustun: rasm ============ -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>Sovg'a rasmi</span>
+        <span class="hint">ixtiyoriy</span>
+      </div>
+
+      <div class="img-preview" id="img-preview">
+        {% if is_edit and prize.display_image %}
+          <img src="{{ prize.display_image }}" alt="{{ prize.title }}" id="preview-img"
+               onerror="this.parentNode.innerHTML='<div class=&quot;ph&quot;>Rasm topilmadi (havola ishlamayapti)</div>'">
+        {% else %}
+          <div class="ph" id="preview-ph">
+            Rasm tanlanmagan<br>
+            <small>Bo'sh qoldirsangiz rarity bo'yicha emoji ishlatiladi</small>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="form-row" style="margin-top:1rem">
+        <label for="{{ form.image.id_for_label }}">Fayl yuklash</label>
+        {{ form.image }}
+        {% for error in form.image.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        <span class="help">PNG, JPG, WEBP yoki GIF. Hajmi 5 MB gacha. Kvadrat rasm eng yaxshi ko'rinadi.</span>
+      </div>
+
+      {% if is_edit and prize.image %}
+        <div class="help" style="margin-top:.5rem">
+          Joriy fayl: <span class="mono">{{ prize.image.name }}</span>
+        </div>
+        <div class="check-row" style="margin-top:.6rem">
+          {{ form.clear_image }}
+          <label for="{{ form.clear_image.id_for_label }}">Yuklangan rasmni o'chirish</label>
+        </div>
+      {% endif %}
+
+      <div class="form-row" style="margin-top:1rem">
+        <label for="{{ form.image_url.id_for_label }}">Yoki tashqi rasm havolasi</label>
+        {{ form.image_url }}
+        {% for error in form.image_url.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        <span class="help">Fayl yuklansa, shu havola o'rniga yuklangan fayl ishlatiladi.</span>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ============ Sovg'ani olish manzili ============ -->
+  <div class="panel" style="margin-top:1.25rem">
+    <div class="panel-title">
+      <span>Sovg'ani olish manzili</span>
+      <span class="hint">ixtiyoriy — MiniAppda QR-kod ostida ko'rinadi</span>
+    </div>
+
+    <div class="form-grid">
+
+      <div class="form-row full">
+        <label for="{{ form.pickup_address.id_for_label }}">Manzil matni</label>
+        {{ form.pickup_address }}
+        {% for error in form.pickup_address.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        <span class="help">O'quvchi QR-kodni ochganda shu matn ko'rinadi.</span>
+      </div>
+
+      <div class="form-row full">
+        <label for="{{ form.map_link.id_for_label }}">Google Maps havolasi</label>
+        {{ form.map_link }}
+        {% for error in form.map_link.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        <span class="help">
+          Google Maps'da kerakli nuqtani bosing → «Ulashish» → havolani nusxalab shu yerga qo'ying.
+          Saqlaganda koordinatalar avtomatik ajratib olinadi.
+        </span>
+      </div>
+
+      <div class="form-row">
+        <label for="{{ form.latitude.id_for_label }}">Kenglik (latitude)</label>
+        {{ form.latitude }}
+        {% for error in form.latitude.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+      </div>
+
+      <div class="form-row">
+        <label for="{{ form.longitude.id_for_label }}">Uzunlik (longitude)</label>
+        {{ form.longitude }}
+        {% for error in form.longitude.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+      </div>
+
+      <div class="form-row full">
+        <label>Xaritadan tanlash</label>
+        <div id="map-picker"
+             style="height:320px;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.12)"></div>
+        <span class="help">
+          Xaritaning istalgan nuqtasini bosing — koordinatalar yuqoridagi maydonlarga yoziladi.
+          <a href="#" id="map-preview-link" target="_blank" rel="noopener"
+             style="text-decoration:underline">Google Maps'da ochib tekshirish</a>
+        </span>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">
+      {% if is_edit %}💾 Saqlash{% else %}+ Qo'shish{% endif %}
+    </button>
+    <a href="{% url 'dashboard-prizes' %}" class="btn">Bekor qilish</a>
+  </div>
+
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // Xaritadan nuqta tanlash — latitude/longitude maydonlarini to'ldiradi.
+  (function () {
+    var latInput = document.getElementById('{{ form.latitude.id_for_label }}');
+    var lngInput = document.getElementById('{{ form.longitude.id_for_label }}');
+    var box = document.getElementById('map-picker');
+    var preview = document.getElementById('map-preview-link');
+    if (!latInput || !lngInput || !box || !window.L) return;
+
+    // Standart markaz — Toshkent
+    var DEFAULT = [41.311081, 69.240562];
+    var hasPoint = latInput.value !== '' && lngInput.value !== '';
+    var start = hasPoint ? [parseFloat(latInput.value), parseFloat(lngInput.value)] : DEFAULT;
+
+    var map = L.map(box).setView(start, hasPoint ? 16 : 12);
+    // Esri World Street Map — kalit talab qilmaydi.
+    // (OSM'ning o'z serverlari brauzerdan kelgan so'rovlarni bloklashi mumkin,
+    //  CARTO esa endi API kalit so'raydi.)
+    var tiles = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, attribution: '© Esri, © OpenStreetMap hissadorlari' }
+    ).addTo(map);
+
+    // Plitkalar yuklanmasa (internet yo'q yoki provayder bloklagan) xaritani
+    // yashirib, havola orqali kiritish yo'lini eslatamiz.
+    var tileErrors = 0;
+    tiles.on('tileerror', function () {
+      tileErrors += 1;
+      if (tileErrors < 4 || box.dataset.failed) return;
+      box.dataset.failed = '1';
+      box.innerHTML = '<div class="ph" style="padding:1rem;text-align:center">'
+        + 'Xarita yuklanmadi.<br><small>Koordinatalarni yuqoridagi '
+        + 'Google Maps havolasi maydoni orqali kiriting.</small></div>';
+    });
+
+    var marker = hasPoint ? L.marker(start, { draggable: true }).addTo(map) : null;
+
+    function updatePreview() {
+      if (!preview) return;
+      if (latInput.value && lngInput.value) {
+        preview.href = 'https://www.google.com/maps/search/?api=1&query='
+                     + latInput.value + ',' + lngInput.value;
+        preview.style.display = '';
+      } else {
+        preview.style.display = 'none';
+      }
+    }
+
+    function setPoint(lat, lng) {
+      latInput.value = lat.toFixed(6);
+      lngInput.value = lng.toFixed(6);
+      if (marker) {
+        marker.setLatLng([lat, lng]);
+      } else {
+        marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+        marker.on('dragend', function () {
+          var p = marker.getLatLng();
+          setPoint(p.lat, p.lng);
+        });
+      }
+      updatePreview();
+    }
+
+    map.on('click', function (e) { setPoint(e.latlng.lat, e.latlng.lng); });
+    if (marker) {
+      marker.on('dragend', function () {
+        var p = marker.getLatLng();
+        setPoint(p.lat, p.lng);
+      });
+    }
+
+    // Qo'lda kiritilganda ham marker ko'chsin
+    [latInput, lngInput].forEach(function (input) {
+      input.addEventListener('change', function () {
+        var lat = parseFloat(latInput.value);
+        var lng = parseFloat(lngInput.value);
+        if (isNaN(lat) || isNaN(lng)) return;
+        setPoint(lat, lng);
+        map.setView([lat, lng], 16);
+      });
+    });
+
+    updatePreview();
+    // Panel ochilgandan keyin o'lchamni qayta hisoblash
+    setTimeout(function () { map.invalidateSize(); }, 200);
+  })();
+</script>
+<script>
+  // Fayl tanlanganda darhol oldindan ko'rsatish
+  (function () {
+    var input = document.getElementById('{{ form.image.id_for_label }}');
+    var box = document.getElementById('img-preview');
+    if (!input || !box) return;
+
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+
+      if (!/^image\//.test(file.type)) {
+        box.innerHTML = '<div class="ph" style="color:#f87171">Bu rasm fayli emas</div>';
+        return;
+      }
+
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        box.innerHTML = '';
+        var img = document.createElement('img');
+        img.src = e.target.result;
+        img.alt = 'Tanlangan rasm';
+        box.appendChild(img);
+      };
+      reader.onerror = function () {
+        box.innerHTML = '<div class="ph" style="color:#f87171">Faylni o\'qib bo\'lmadi</div>';
+      };
+      reader.readAsDataURL(file);
+    });
+  })();
+</script>
+{% endblock %}

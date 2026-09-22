@@ -1,0 +1,96 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}O'quvchilar{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>O'quvchilar</h2>
+    <p class="sub">Ro'yxatdan o'tgan o'quvchilar bazasi — {{ total_found }} ta topildi</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'dashboard-leads-export' %}?q={{ q|urlencode }}"
+       class="btn btn-primary">⬇ CSV (Excel) yuklab olish</a>
+  </div>
+</div>
+
+<form method="get" class="filter-bar">
+  <div class="form-row">
+    <label for="q">Qidiruv</label>
+    <input type="text" id="q" name="q" class="form-input" value="{{ q }}"
+           placeholder="Ism, familiya, telefon yoki Telegram ID">
+  </div>
+
+  <div class="row-actions">
+    <button type="submit" class="btn btn-primary">Filtrlash</button>
+    {% if q %}
+      <a href="{% url 'dashboard-leads' %}" class="btn">Tozalash</a>
+    {% endif %}
+  </div>
+</form>
+
+<div class="panel">
+  {% if page_obj.object_list %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>O'quvchi</th>
+            <th>Telefon</th>
+            <th style="text-align:right">Yutuq</th>
+            <th style="text-align:right">Taklif qilgan</th>
+            <th style="text-align:right">Spin</th>
+            <th>Kim orqali keldi</th>
+            <th>Sana</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lead in page_obj %}
+            <tr>
+              <td>
+                <div class="td-strong">{{ lead.first_name }} {{ lead.last_name|default:'' }}</div>
+                <div class="td-muted mono">{{ lead.telegram_id }}</div>
+              </td>
+              <td class="mono">{{ lead.phone_number }}</td>
+              <td style="text-align:right" class="td-strong">{{ lead.win_count }}</td>
+              <td style="text-align:right">
+                {% if lead.invited_count %}
+                  <span class="badge on">{{ lead.invited_count }}</span>
+                {% else %}
+                  <span class="td-muted">0</span>
+                {% endif %}
+              </td>
+              <td style="text-align:right" class="td-muted">+{{ lead.extra_spins }}</td>
+              <td class="td-muted">
+                {% if lead.referrer %}
+                  {{ lead.referrer.first_name }} {{ lead.referrer.last_name|default:'' }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td class="td-muted">{{ lead.created_at|date:"d.m.Y H:i" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% include 'dashboard/_pagination.html' %}
+
+  {% else %}
+    <div class="empty">
+      <span class="icon">👥</span>
+      {% if q %}
+        Filtrga mos o'quvchi topilmadi.
+        <div style="margin-top:.9rem">
+          <a href="{% url 'dashboard-leads' %}" class="btn btn-sm">Filtrni tozalash</a>
+        </div>
+      {% else %}
+        Hali hech kim ro'yxatdan o'tmagan.
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

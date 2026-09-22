@@ -1,0 +1,260 @@
+{% extends 'dashboard/base.html' %}
+{% load l10n %}
+
+{% block title %}Statistika{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>Statistika</h2>
+    <p class="sub">Loyihaning umumiy ko'rsatkichlari va so'nggi harakatlar</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'dashboard-leads-export' %}" class="btn">⬇ O'quvchilar CSV</a>
+    <a href="{% url 'dashboard-prize-create' %}" class="btn btn-primary">+ Sovg'a qo'shish</a>
+  </div>
+</div>
+
+{% if prob.active_count == 0 %}
+  <div class="msg warning" style="margin-bottom:1.1rem">
+    <span>⚠️</span>
+    <span>
+      Hozircha birorta <b>aktiv sovg'a</b> yo'q — baraban ishlamaydi.
+      <a href="{% url 'dashboard-prize-create' %}" style="text-decoration:underline">Sovg'a qo'shing</a>.
+    </span>
+  </div>
+{% endif %}
+
+<!-- ============ Asosiy ko'rsatkichlar ============ -->
+<div class="stat-grid">
+
+  <div class="stat-card">
+    <div class="stat-label">O'quvchilar</div>
+    <div class="stat-value">{{ stats.total_leads }}</div>
+    <div class="stat-meta">Bugun: <b>+{{ stats.leads_today }}</b> · 7 kunda: {{ stats.leads_week }}</div>
+  </div>
+
+  <div class="stat-card gold">
+    <div class="stat-label">Yutuqlar</div>
+    <div class="stat-value">{{ stats.total_winnings }}</div>
+    <div class="stat-meta">Bugun: <b>+{{ stats.winnings_today }}</b></div>
+  </div>
+
+  <div class="stat-card green">
+    <div class="stat-label">Aktiv (kutilmoqda)</div>
+    <div class="stat-value">{{ stats.active_count }}</div>
+    <div class="stat-meta">Hali olib ketilmagan sovg'alar</div>
+  </div>
+
+  <div class="stat-card amber">
+    <div class="stat-label">Berilgan</div>
+    <div class="stat-value">{{ stats.used_count }}</div>
+    <div class="stat-meta">Konversiya: {{ stats.redemption_rate }}%</div>
+  </div>
+
+  <div class="stat-card red">
+    <div class="stat-label">Muddati o'tgan</div>
+    <div class="stat-value">{{ stats.expired_count }}</div>
+    <div class="stat-meta">Olib ketilmagan yutuqlar</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-label">Referral orqali</div>
+    <div class="stat-value">{{ stats.referral_count }}</div>
+    <div class="stat-meta">Do'st taklifi bilan kelganlar</div>
+  </div>
+
+</div>
+
+<!-- ============ Grafik + Rarity ============ -->
+<div class="grid-2">
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>Oxirgi 14 kun</span>
+      <span class="hint">kunlik o'quvchi va yutuq soni</span>
+    </div>
+    <div style="height:260px"><canvas id="daily-chart"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Rarity bo'yicha yutuqlar</div>
+    {% if rarity_rows %}
+      {% for row in rarity_rows %}
+        <div class="bar-row">
+          <div class="bar-head">
+            <span class="name" style="color:{{ row.color }}">{{ row.label }}</span>
+            <span class="val">{{ row.count }} ta · {{ row.percent }}%</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:{{ row.percent|unlocalize }}%;background:{{ row.color }}"></div>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty"><span class="icon">📭</span>Hali yutuqlar yo'q</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- ============ Sovg'a samaradorligi ============ -->
+<div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>Sovg'alar samaradorligi</span>
+      <span class="hint">sozlangan va real ulush</span>
+    </div>
+
+    {% if performance %}
+      {% for row in performance %}
+        <div class="bar-row">
+          <div class="bar-head">
+            <span class="name">
+              {{ row.prize.title }}
+              {% if not row.prize.is_active %}<span class="badge off" style="margin-left:.3rem">off</span>{% endif %}
+            </span>
+            <span class="val">{{ row.win_count }} ta · {{ row.used_count }} berilgan</span>
+          </div>
+          <div class="dual-bar">
+            <div class="bar-track">
+              <div class="bar-fill" style="width:{{ row.expected_percent|unlocalize }}%;background:{{ row.prize.hex_color }};opacity:.45"></div>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" style="width:{{ row.actual_percent|unlocalize }}%;background:{{ row.prize.hex_color }}"></div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+      <div class="legend-inline">
+        <span><i class="legend-dot" style="background:#6366f1;opacity:.45"></i> Kutilgan (sozlama)</span>
+        <span><i class="legend-dot" style="background:#6366f1"></i> Real natija</span>
+      </div>
+    {% else %}
+      <div class="empty"><span class="icon">🎁</span>Sovg'alar qo'shilmagan</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- ============ So'nggi yutuqlar ============ -->
+<div class="panel">
+  <div class="panel-title">
+    <span>So'nggi yutuqlar</span>
+    <a href="{% url 'dashboard-winnings' %}" class="hint" style="text-decoration:underline">Barchasi →</a>
+  </div>
+
+  {% if recent %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Promokod</th><th>O'quvchi</th><th>Telefon</th>
+            <th>Sovg'a</th><th>Holati</th><th>Vaqti</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for w in recent %}
+            <tr>
+              <td class="mono td-strong">{{ w.promo_code }}</td>
+              <td>{{ w.lead.first_name }} {{ w.lead.last_name|default:'' }}</td>
+              <td class="td-muted mono">{{ w.lead.phone_number }}</td>
+              <td>
+                <span class="badge {{ w.prize.rarity }}">{{ w.prize.rarity }}</span>
+                <span style="margin-left:.4rem">{{ w.prize.title }}</span>
+              </td>
+              <td><span class="badge {{ w.status }}">{{ w.get_status_display }}</span></td>
+              <td class="td-muted">{{ w.created_at|date:"d.m.Y H:i" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty"><span class="icon">📭</span>Hali hech kim baraban aylantirmagan</div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script id="chart-data" type="application/json">{{ chart|safe }}</script>
+<script>
+  (function () {
+    var canvas = document.getElementById('daily-chart');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    var data;
+    try {
+      data = JSON.parse(document.getElementById('chart-data').textContent);
+    } catch (e) {
+      console.error('Grafik ma\'lumotini o\'qib bo\'lmadi:', e);
+      return;
+    }
+
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.font.family = "'Outfit', sans-serif";
+
+    new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [
+          {
+            label: "O'quvchilar",
+            data: data.leads,
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99, 102, 241, 0.16)',
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2,
+            pointRadius: 2,
+            pointHoverRadius: 5
+          },
+          {
+            label: 'Yutuqlar',
+            data: data.winnings,
+            borderColor: '#eab308',
+            backgroundColor: 'rgba(234, 179, 8, 0.12)',
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2,
+            pointRadius: 2,
+            pointHoverRadius: 5
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'top',
+            align: 'end',
+            labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, padding: 14 }
+          },
+          tooltip: {
+            backgroundColor: '#172033',
+            borderColor: 'rgba(255,255,255,.15)',
+            borderWidth: 1,
+            padding: 10,
+            cornerRadius: 8
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 14 } },
+          y: {
+            beginAtZero: true,
+            grid: { color: 'rgba(255,255,255,.06)' },
+            ticks: { precision: 0, stepSize: 1 }
+          }
+        }
+      }
+    });
+  })();
+</script>
+{% endblock %}

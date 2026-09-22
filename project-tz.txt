@@ -1,0 +1,43 @@
+Siz Senior Full-Stack Dasturchisiz. Ushbu loyihani bajarishda quyidagi arxitektura va kod sifat qoidalariga strict (qat'iy) rioya qiling:
+
+1. **Production-Ready Code:** Chala, misol tariqasidagi (`// TODO: write code here`) kodlar qoldirmang. Barcha mantiq to'liq va ishlaydigan holatda yozilishi shart.
+2. **Security First:** Telegram `initData` autentifikatsiyasini har bir so'rovda tekshiring. CSRF va SQL-injection xavfsizligini ta'minlang.
+3. **No External Heavy Dependencies:** Frontend uchun ortiqcha og'ir JS freymvorklar (React/Vue) ishlatmang. Faqat Vanilla JS (ES6+) va Tailwind CSS CDN yetarli.
+4. **Clean Code & Modular Structure:** Django loyihada barcha biznes mantiq `services.py` faylida bo'lsin, `views.py` faqat so'rovlarni qabul qilib javob qaytarsin.
+5. **Error Handling:** Barcha API va JS funksiyalarda `try-catch` hamda mos HTTP status kodlari (200, 400, 403, 500) ishlatilsin.
+
+
+
+Project Name: Texnopark Telegram Mini AppTarget Platform: Telegram WebApp (Mobile First)Tech Stack:Backend: Python 3.11+, Django 5.0+, Django REST Framework (DRF)Frontend: HTML5, CSS3 (Tailwind CSS CDN + Custom Animations), Vanilla JavaScript (ES6+), Web Audio APIDatabase: SQLite (MVP) / PostgreSQLIntegrations: Telegram Bot API (python-telegram-bot or aiogram), Telegram WebApp JS SDK1. LOYIHA ARXITEKTURASI VA PAPKALAR STRUKTURASILoyiha monolitik Django arxitekturasida, frontend assetlar va HTML shablonlari bilan birga tuziladi:Plaintexttexnopark_app/
+├── manage.py
+├── core/                   # Django global settings & URL routing
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+├── bot/                    # Telegram Bot dispatcher & webhook logic
+│   ├── handlers.py
+│   ├── bot_instance.py
+│   └── utils.py
+├── app_main/               # Core business logic
+│   ├── models.py
+│   ├── views.py
+│   ├── serializers.py
+│   ├── urls.py
+│   ├── services.py         # Anti-cheat & probability algorithm
+│   └── admin.py
+├── templates/              # HTML Templates
+│   ├── miniapp/
+│   │   ├── index.html      # Case Opener / Skin Roulette sahifasi
+│   │   ├── form.html       # Lid to'ldirish modal oynasi
+│   │   └── result.html     # Yutuq va QR-kod sahifasi
+│   └── admin_panel/
+│       └── scan.html       # Admin QR skanerlash sahifasi
+└── static/
+    ├── css/
+    │   └── style.css       # Custom CS-style glow/borders & slider styles
+    ├── js/
+    │   ├── roulette.js     # Smooth Roulette Scroll Engine
+    │   └── app.js          # Telegram WebApp SDK & API integration
+    ├── audio/              # Sound effects (tick.mp3, win.mp3)
+    └── images/             # Prize icons / backgrounds
+2. DATABASE ARCHITECTURE (DATABASE MODELLARI)app_main/models.py ichida quyidagi 3 ta asosiy model yaratilishi kerak:1. Prize (Sovg'alar va Skinlar)id: Primary Keytitle: CharField(max_length=100) — Masalan: "10% Chegirma", "3D Brelok"rarity: CharField — Choices: COMMON (Ko'k), RARE (Siyohrang), EPIC (Pushti), LEGENDARY (Oltin/Sariq)image_url: URLField yoki ImageField — Sovg'a ikonka/rasmiprobability: IntegerField — Ehtimollik og'irligi (0-100%)valid_days: IntegerField (default=3) — Yutuq amal qilish muddati (kun)is_active: BooleanField(default=True)2. StudentLead (O'quvchi ma'lumotlari)id: Primary Keytelegram_id: BigIntegerField(unique=True, db_index=True)first_name: CharField(max_length=100)last_name: CharField(max_length=100, null=True, blank=True)phone_number: CharField(max_length=20)school_number: CharField(max_length=50) — Masalan: "14-maktab"grade_class: CharField(max_length=20) — Masalan: "9-B"created_at: DateTimeField(auto_now_add=True)3. WinningResult (Yutuqlar jurnali)id: Primary Keylead: ForeignKey(StudentLead, on_delete=models.CASCADE)prize: ForeignKey(Prize, on_delete=models.PROTECT)promo_code: CharField(max_length=20, unique=True, db_index=True) — Masalan: TX-8923status: CharField — Choices: ACTIVE, USED, EXPIRED (default=ACTIVE)expires_at: DateTimeField()created_at: DateTimeField(auto_now_add=True)used_at: DateTimeField(null=True, blank=True)3. ANTI-CHEAT VA BIZNES MANTIQ (SECURITY & LOGIC)Telegram InitData Validation: Backend har bir API so'rovda Telegram WebApp initData hometikatsiyasini (HMAC-SHA256 signature) tekshirishi va soxta so'rovlarni taqiqlashi shart.Single Spin Rule (Faqat 1 marta):Foydalanuvchi ilovaga kirganda Backend u baraban/roulette aylantirganini WinningResult orqali tekshiradi.Agar yutuq mavjud bo'lsa, roulette ko'rsatilmaydi — to'g'ridan-to'g'ri result.html (QR-kod va countdown timer) ochiladi.Server-Side Weighted Probability Algorithm:Yutuq qaysi sovg'aga tushishi klientda (JS) emas, Backend'da (Django) hal qilinadi.Modeldagi probability og'irliklariga ko'ra backend yutuqni aniqlaydi va natijani frontendga yuboradi.4. REST API ENDPOINTSMethodEndpointDescriptionPOST/api/validate-init/Telegram WebApp initData xavfsizlik tekshiruvi va foydalanuvchi statusiGET/api/prizes/Roulette lentalarini generatsiya qilish uchun aktiv sovg'alar va ularning rarity ranglariPOST/api/spin/Yutuqni backend serverda oldindan aniqlash, prize_id va lentalar to'xtash indeksini qaytarishPOST/api/claim-prize/Formadagi ma'lumotlarni (StudentLead) va yutuqni (WinningResult) bazaga saqlash, Promokod generatsiya qilishGET/api/my-prize/O'quvchining aktiv yutug'ini, amal qilish muddati va QR-kodini olishPOST/api/admin/verify-code/Texnopark adminga QR/Promokodni skanerlab, statusni USED ga o'tkazish imkonini berish5. FRONTEND: CS-GO / CS2 SKIN ROULETTE SCROLL ENGINE (static/js/roulette.js)Doira baraban o'rniga Counter-Strike (CS2) keys ochish stolidagi kabi Gorizontal Skin Roulette animatsiyasi amalga oshiriladi:UI Layout:Ekranning markazida harakatsiz to'xtash ko'rsatkichi (Vertical Selector Line/Pointer) turadi.Uning orqasida gorizontal overflow: hidden qilingan konteyner va ichida .roulette-track lentasi bo'ladi.Har bir sovg'a kartochkasi CS2 skin kartochkasiga o'xshaydi:Sovg'a rasmi / ikonkaNomiKamyoblik darajasining rangi (rarity bo'yicha: COMMON=Ko'k, RARE=Siyohrang, EPIC=Pushti, LEGENDARY=Oltin). Kartochka atrofida mos rangli Glow (nur) effekti bo'ladi.Animation Engine Mantiqi:Foydalanuvchi "Keysni Ochish" tugmasini bosganda, POST /api/spin/ so'rovi ketadi va yutgan prize_id olinadi.JS orqali .roulette-track ichiga 60-80 ta tasodifiy sovg'a kartochkalari joylashtiriladi.Masalan, 65-indeksdagi kartochkaga aynan yutib olingan prize_id qo'yiladi.CSS transform: translateX(-Xpx) va transition: transform 5s cubic-bezier(0.12, 0.8, 0.2, 1) yordamida lenta juda tez harakatlanib, oxirida sekinlashadi va 65-kartochkaning o'rtasida — Pointer chizig'ida to'xtaydi.Lenta harakatlanayotganda har bir kartochka pointerdan o'tganda Web Audio API yoki HTML5 Audio orqali "tq-tq-tq" (tick sound) ovozi va to'xtagan paytda Glow animatsiyasi + Win sound chalinsin.Animatsiya tugashi bilan o'quvchining oldida form.html modal oynasi ochiladi.6. FORM VA YUTUQ QR-KOD SAHIFASI (result.html)Modal Form (form.html):Ism va FamiliyaMaktab raqami va Sinf (masalan: 14-maktab, 9-B)Telefon raqami (Send Contact tugmasi yoki matn)"Yutuqni Tasdiqlash va Olish" tugmasi.Yutuq Sahifasi (result.html):Yutib olingan sovg'a kartochkasi (CS2 style glow bilan).Generatsiya qilingan QR-kod (qrcode.js kutubxonasi orqali, tarkibida promo_code matni bo'ladi).Real-time Countdown Timer: Yutuq tugashiga qancha vaqt qolganini (masalan: 02 kun : 23 soat : 59 daqiq : 45 sek) sanab turadi.7. ADMIN PANEL VA SCANNERSDjango Admin Panel:Sovg'alarni va ularning kamyoblik (rarity) darajalari hamda chiqqish ehtimolliklarini boshqarish.StudentLead ma'lumotlarini Excel/CSV faylga eksport qilish (django-import-export integratsiyasi).Admin Scanner Page (/admin-scan/):Texnopark xodimi mobil brauzerdan kirishi uchun sodda va qulay interfeys.html5-qrcode JS kutubxonasi o'rnatilgan brauzer kamerasi orqali o'quvchining QR-kodini skanerlaydi.Ekran ma'lumotni chiqaradi: O'quvchi: Ism | Maktab | Yutuq: 10% Chegirma | Status: ACTIVE.Admin "Sovg'ani Berish / Aktivlashtirish" tugmasini bosganda status USED ga o'zgaradi.8. INSTRUCTIONS FOR THE AI AGENTAI-Agent loyihani quyidagi tartibda bosqichma-bosqich bajarishi shart:Step 1: Django app setup, models.py yaratish va migration-larni bajarish.Step 2: Telegram initData autentifikatsiyasi va probability algoritmini services.py faylida yozish.Step 3: REST API endpointlarini DRF serializers va views orqali shakllantirish.Step 4: HTML Templates va roulette.js faylini yozish. Smooth CSS transition va CS2 kartochkalar dizaynini yaratish.Step 5: Modal formani va qrcode.js yordamida QR-kod generatsiya qilish qismini bog'lash.Step 6: Telegram Bot handlerlarini tayyorlash va QR-kod skanerlovchi admin sahifasini yakunlash.

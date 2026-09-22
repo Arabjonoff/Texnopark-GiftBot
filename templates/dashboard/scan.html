@@ -1,0 +1,323 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}QR Skaner{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>QR Skaner</h2>
+    <p class="sub">O'quvchining QR-kodini skanerlang yoki promokodni qo'lda kiriting</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'dashboard-winnings' %}" class="btn">🏆 Yutuqlar jurnali</a>
+  </div>
+</div>
+
+<div class="msg info" style="margin-bottom:1.1rem">
+  <span>ℹ️</span>
+  <span>
+    Skanerlash sovg'ani <b>darhol bermaydi</b> — avval o'quvchi ma'lumoti chiqadi,
+    keyin «Sovg'ani berish» tugmasini bosasiz.
+  </span>
+</div>
+
+<div class="scan-grid">
+
+  <!-- ============ Kamera ============ -->
+  <div class="panel">
+    <div class="panel-title">
+      <span>Kamera</span>
+      <span class="hint" id="cam-state">o'chiq</span>
+    </div>
+
+    <div id="qr-reader"></div>
+
+    <div class="row-actions" style="margin-top:.9rem">
+      <button type="button" class="btn btn-primary" id="btn-start">📷 Kamerani yoqish</button>
+      <button type="button" class="btn" id="btn-stop" style="display:none">⏹ To'xtatish</button>
+    </div>
+
+    <div class="form-row" style="margin-top:1.2rem">
+      <label for="manual-code">Yoki promokodni qo'lda kiriting</label>
+      <div class="manual-entry">
+        <input type="text" id="manual-code" class="form-input mono"
+               placeholder="TX-8923" maxlength="20" autocomplete="off">
+        <button type="button" class="btn btn-primary" id="btn-manual">Tekshirish</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Natija ============ -->
+  <div class="panel scan-result">
+    <div class="panel-title">
+      <span>Natija</span>
+      <span class="badge off" id="res-status">kutilmoqda</span>
+    </div>
+
+    <div id="res-empty" class="empty">
+      <span class="icon">📷</span>
+      QR-kod skanerlanmagan
+    </div>
+
+    <div id="res-body" style="display:none">
+      <div class="result-row"><span class="k">Promokod</span><span class="v mono" id="res-code">—</span></div>
+      <div class="result-row"><span class="k">O'quvchi</span><span class="v" id="res-name">—</span></div>
+      <div class="result-row"><span class="k">Telefon</span><span class="v mono" id="res-phone">—</span></div>
+      <div class="result-row"><span class="k">Sovg'a</span><span class="v" id="res-prize">—</span></div>
+      <div class="result-row"><span class="k">Muddati</span><span class="v" id="res-expires">—</span></div>
+
+      <div id="res-error" class="msg error" style="display:none;margin-top:1rem">
+        <span>⛔</span><span id="res-error-text"></span>
+      </div>
+
+      <button type="button" class="btn btn-success btn-block" id="btn-confirm"
+              style="margin-top:1.1rem;display:none">
+        ✓ Sovg'ani berish va tasdiqlash
+      </button>
+
+      <button type="button" class="btn btn-block" id="btn-reset" style="margin-top:.6rem">
+        Yangi skanerlash
+      </button>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var scanner = null;
+  var currentCode = null;
+
+  var el = {
+    start:   document.getElementById('btn-start'),
+    stop:    document.getElementById('btn-stop'),
+    manual:  document.getElementById('btn-manual'),
+    input:   document.getElementById('manual-code'),
+    confirm: document.getElementById('btn-confirm'),
+    reset:   document.getElementById('btn-reset'),
+    camState: document.getElementById('cam-state'),
+    empty:   document.getElementById('res-empty'),
+    body:    document.getElementById('res-body'),
+    status:  document.getElementById('res-status'),
+    code:    document.getElementById('res-code'),
+    name:    document.getElementById('res-name'),
+    phone:   document.getElementById('res-phone'),
+    prize:   document.getElementById('res-prize'),
+    expires: document.getElementById('res-expires'),
+    error:   document.getElementById('res-error'),
+    errorText: document.getElementById('res-error-text')
+  };
+
+  // Django CSRF tokenini cookie'dan olamiz
+  function getCookie(name) {
+    var match = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[2]) : '';
+  }
+
+  function setStatus(text, cls) {
+    el.status.textContent = text;
+    el.status.className = 'badge ' + cls;
+  }
+
+  function showError(text) {
+    el.errorText.textContent = text;
+    el.error.style.display = 'flex';
+  }
+
+  function hideError() {
+    el.error.style.display = 'none';
+  }
+
+  // Dashboardning qolgan sahifalaridagi kabi dd.mm.yyyy HH:MM
+  function formatDate(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear()
+         + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function fill(winning) {
+    if (!winning) return;
+    if (winning.lead) {
+      el.name.textContent = (winning.lead.first_name + ' ' + (winning.lead.last_name || '')).trim();
+      el.phone.textContent = winning.lead.phone_number;
+    }
+    if (winning.prize) {
+      el.prize.textContent = winning.prize.title + ' [' + winning.prize.rarity + ']';
+    }
+    el.expires.textContent = formatDate(winning.expires_at);
+  }
+
+  function resetResult() {
+    currentCode = null;
+    el.body.style.display = 'none';
+    el.empty.style.display = 'block';
+    el.confirm.style.display = 'none';
+    hideError();
+    setStatus('kutilmoqda', 'off');
+    el.input.value = '';
+  }
+
+  // ---------------------------------------------------------- API
+
+  async function verify(code, confirm) {
+    code = (code || '').trim().toUpperCase();
+    if (!code) return;
+
+    currentCode = code;
+    el.empty.style.display = 'none';
+    el.body.style.display = 'block';
+    el.code.textContent = code;
+    hideError();
+    setStatus('tekshirilmoqda…', 'off');
+    el.confirm.disabled = true;
+
+    try {
+      var resp = await fetch('/api/admin/verify-code/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ promo_code: code, confirm: !!confirm })
+      });
+
+      var data = await resp.json();
+
+      if (!resp.ok) {
+        fill(data.winning_result);
+        setStatus('rad etildi', 'EXPIRED');
+        showError(data.error || 'Tekshirishda xatolik yuz berdi.');
+        el.confirm.style.display = 'none';
+        return;
+      }
+
+      fill(data.winning_result);
+
+      if (data.confirmed) {
+        setStatus('berildi', 'ACTIVE');
+        el.confirm.style.display = 'none';
+        showErrorFree(data.message);
+      } else {
+        setStatus('aktiv — tasdiqlang', 'ACTIVE');
+        el.confirm.style.display = 'block';
+        el.confirm.disabled = false;
+      }
+
+    } catch (err) {
+      console.error('Verify API xatosi:', err);
+      setStatus('xatolik', 'EXPIRED');
+      showError('Server bilan bog\'lanib bo\'lmadi. Internetni tekshiring.');
+    }
+  }
+
+  // Muvaffaqiyat xabarini xato bloki o'rnida yashil qilib ko'rsatamiz
+  function showErrorFree(text) {
+    el.errorText.textContent = text || 'Sovg\'a berildi.';
+    el.error.style.display = 'flex';
+    el.error.className = 'msg success';
+    el.error.firstElementChild.textContent = '✅';
+  }
+
+  // ---------------------------------------------------------- Kamera
+
+  function startCamera() {
+    if (typeof Html5Qrcode === 'undefined') {
+      showError('Skaner kutubxonasi yuklanmadi. Sahifani yangilang.');
+      return;
+    }
+
+    scanner = new Html5Qrcode('qr-reader');
+    scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 230, height: 230 } },
+      function (decodedText) {
+        stopCamera();
+        verify(decodedText, false);
+      },
+      function () { /* har kadrdagi o'qilmaslik — e'tiborsiz qoldiriladi */ }
+    ).then(function () {
+      el.start.style.display = 'none';
+      el.stop.style.display = 'inline-flex';
+      el.camState.textContent = 'yoqilgan';
+    }).catch(function (err) {
+      console.error('Kamera xatosi:', err);
+      showErrorStandalone(
+        'Kamerani yoqib bo\'lmadi. Brauzerda kameraga ruxsat berganingizni va ' +
+        'sayt HTTPS orqali ochilganini tekshiring.'
+      );
+    });
+  }
+
+  function showErrorStandalone(text) {
+    el.empty.style.display = 'none';
+    el.body.style.display = 'block';
+    el.error.className = 'msg error';
+    el.error.firstElementChild.textContent = '⛔';
+    showError(text);
+  }
+
+  function stopCamera() {
+    if (!scanner) return;
+    scanner.stop().then(function () {
+      scanner.clear();
+      scanner = null;
+      el.start.style.display = 'inline-flex';
+      el.stop.style.display = 'none';
+      el.camState.textContent = 'o\'chiq';
+    }).catch(function (err) {
+      console.error('Kamerani to\'xtatishda xatolik:', err);
+    });
+  }
+
+  // ---------------------------------------------------------- Events
+
+  el.start.addEventListener('click', startCamera);
+  el.stop.addEventListener('click', stopCamera);
+
+  el.manual.addEventListener('click', function () {
+    verify(el.input.value, false);
+  });
+
+  el.input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      verify(el.input.value, false);
+    }
+  });
+
+  el.confirm.addEventListener('click', function () {
+    if (!currentCode) return;
+    if (!window.confirm(currentCode + ' — sovg\'a berildi deb tasdiqlansinmi?')) return;
+    el.error.className = 'msg error';
+    el.error.firstElementChild.textContent = '⛔';
+    verify(currentCode, true);
+  });
+
+  el.reset.addEventListener('click', function () {
+    el.error.className = 'msg error';
+    el.error.firstElementChild.textContent = '⛔';
+    resetResult();
+    el.input.focus();
+  });
+
+  // Sahifadan chiqishda kamerani bo'shatamiz
+  window.addEventListener('beforeunload', function () {
+    if (scanner) { try { scanner.stop(); } catch (e) {} }
+  });
+
+})();
+</script>
+{% endblock %}

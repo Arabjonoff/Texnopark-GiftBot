@@ -1,0 +1,125 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Yutuqlar{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>Yutuqlar jurnali</h2>
+    <p class="sub">Barcha promokodlar va ularning holati — {{ total_found }} ta topildi</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'dashboard-scan' %}" class="btn">📷 QR Skaner</a>
+    <a href="{% url 'dashboard-winnings-export' %}?q={{ q|urlencode }}&status={{ status|urlencode }}"
+       class="btn btn-primary">⬇ CSV yuklab olish</a>
+  </div>
+</div>
+
+<form method="get" class="filter-bar">
+  <div class="form-row">
+    <label for="q">Qidiruv</label>
+    <input type="text" id="q" name="q" class="form-input" value="{{ q }}"
+           placeholder="Promokod, ism yoki telefon">
+  </div>
+
+  <div class="form-row" style="flex:0 0 175px">
+    <label for="status">Holati</label>
+    <select name="status" id="status" class="form-input">
+      <option value="">Barchasi</option>
+      {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="row-actions">
+    <button type="submit" class="btn btn-primary">Filtrlash</button>
+    {% if q or status %}
+      <a href="{% url 'dashboard-winnings' %}" class="btn">Tozalash</a>
+    {% endif %}
+  </div>
+</form>
+
+<div class="panel">
+  {% if page_obj.object_list %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Promokod</th>
+            <th>O'quvchi</th>
+            <th>Sovg'a</th>
+            <th>Holati</th>
+            <th>Muddati</th>
+            <th style="text-align:right">Amal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for w in page_obj %}
+            <tr>
+              <td class="mono td-strong">{{ w.promo_code }}</td>
+              <td>
+                <div class="td-strong">{{ w.lead.first_name }} {{ w.lead.last_name|default:'' }}</div>
+                <div class="td-muted mono">{{ w.lead.phone_number }}</div>
+              </td>
+              <td>
+                <div class="cell-prize">
+                  <div class="prize-thumb" style="width:32px;height:32px;font-size:.95rem">
+                    <span>{% if w.prize.rarity == 'LEGENDARY' %}🏆{% elif w.prize.rarity == 'EPIC' %}💎{% elif w.prize.rarity == 'RARE' %}🎁{% else %}⭐{% endif %}</span>
+                    {% if w.prize.display_image %}
+                      <img src="{{ w.prize.display_image }}" alt="" onerror="this.remove()">
+                    {% endif %}
+                  </div>
+                  <div>
+                    <div>{{ w.prize.title }}</div>
+                    <span class="badge {{ w.prize.rarity }}">{{ w.prize.rarity }}</span>
+                  </div>
+                </div>
+              </td>
+              <td><span class="badge {{ w.status }}">{{ w.get_status_display }}</span></td>
+              <td class="td-muted">
+                {{ w.expires_at|date:"d.m.Y H:i" }}
+                {% if w.used_at %}
+                  <div style="color:var(--success);font-size:.75rem">
+                    Berilgan: {{ w.used_at|date:"d.m H:i" }}
+                  </div>
+                {% endif %}
+              </td>
+              <td>
+                <div class="row-actions" style="justify-content:flex-end">
+                  {% if w.status == 'ACTIVE' %}
+                    <form method="post" action="{% url 'dashboard-winning-activate' w.pk %}" class="inline-form"
+                          onsubmit="return confirm('{{ w.promo_code }} — «{{ w.prize.title|escapejs }}» berildi deb belgilansinmi?');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-success">✓ Berildi</button>
+                    </form>
+                  {% else %}
+                    <span class="td-muted">—</span>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% include 'dashboard/_pagination.html' %}
+
+  {% else %}
+    <div class="empty">
+      <span class="icon">🏆</span>
+      {% if q or status %}
+        Filtrga mos yutuq topilmadi.
+        <div style="margin-top:.9rem">
+          <a href="{% url 'dashboard-winnings' %}" class="btn btn-sm">Filtrni tozalash</a>
+        </div>
+      {% else %}
+        Hali hech kim baraban aylantirmagan.
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

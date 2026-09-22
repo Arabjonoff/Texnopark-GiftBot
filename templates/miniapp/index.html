@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Yoshlar Texnoparki</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- QRCode.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="brand-badge">
+      <div class="brand-logo">YT</div>
+      <div class="brand-text">
+        <h1>Yoshlar Texnoparki</h1>
+        <p id="header-subtitle">Gift Box</p>
+      </div>
+    </div>
+    <button id="sound-toggle" class="sound-toggle active" title="Ovozni o'chirish/yoqish">
+      🔊
+    </button>
+  </header>
+
+  <!-- Main View Container -->
+  <main class="main-wrapper">
+
+    <!-- ============================================================ -->
+    <!-- TAB 1: BARABAN                                               -->
+    <!-- ============================================================ -->
+    <section id="view-spin" class="tab-view active">
+
+      <div class="roulette-wrapper">
+        <div class="roulette-header">
+          <h2>Gift Ochish Barabani</h2>
+          <p>Tugmani bosing va qimmatbaho yutuqlardan birini qo'lga kiriting!</p>
+        </div>
+
+        <div id="roulette-viewport" class="roulette-viewport">
+          <!-- Center pointer line indicator -->
+          <div class="selector-pointer"></div>
+
+          <!-- Dynamic cards track -->
+          <div id="roulette-track" class="roulette-track">
+            <!-- Rendered by roulette.js -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button id="spin-btn" class="btn-spin">
+        <span id="spin-btn-text">🔑 Ochish</span>
+      </button>
+
+      <!-- Rarity badges legend -->
+      <div class="flex items-center justify-center gap-3 text-xs text-gray-400">
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span> Common</span>
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span> Rare</span>
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-pink-500 inline-block"></span> Epic</span>
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-yellow-500 inline-block"></span> Legendary</span>
+      </div>
+
+      <!-- REFERRAL HUB CARD -->
+      <div id="referral-card" class="referral-card">
+        <div class="referral-header">
+          <div class="referral-icon">👥</div>
+          <div class="referral-info">
+            <h3>Do'stlarni Taklif Qiling!</h3>
+            <p>Har bir taklif qilgan do'stingiz uchun barabanni aylantirishga <b>+1 imkoniyat</b> oling!</p>
+          </div>
+        </div>
+
+        <div class="referral-input-box">
+          <input type="text" id="ref-link-input" class="referral-input" readonly value="https://t.me/texnogiftbot?start=ref_">
+          <button id="btn-copy-ref" class="btn-copy-ref">📋 Nusxalash</button>
+        </div>
+
+        <button id="btn-share-tg" class="btn-share-tg">
+          🚀 Telegram'da Do'stlarga Ulashish
+        </button>
+
+        <div class="flex items-center justify-between text-xs text-slate-300 pt-1 border-t border-slate-700/60">
+          <span>Taklif qilgan do'stlaringiz: <b id="invited-count-badge" class="text-amber-400 font-extrabold">0</b> ta</span>
+          <span>Imkoniyatlar: <b id="spins-count-badge" class="text-emerald-400 font-extrabold">1</b> ta</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- TAB 2: YUTUQLAR TARIXI                                       -->
+    <!-- ============================================================ -->
+    <section id="view-history" class="tab-view">
+
+      <div class="view-header">
+        <h2>🎁 Yutuqlarim</h2>
+        <p>Siz yutib olgan sovg'alar va ularning QR-kodlari</p>
+      </div>
+
+      <!-- Bo'sh holat -->
+      <div id="history-empty" class="state-box">
+        <span class="state-icon">📭</span>
+        <h3>Hali yutug'ingiz yo'q</h3>
+        <p>Barabanni aylantiring va birinchi sovg'angizni qo'lga kiriting!</p>
+        <button class="btn-goto-spin" data-goto="spin">🎰 Barabanga o'tish</button>
+      </div>
+
+      <!-- Yuklanmoqda -->
+      <div id="history-loading" class="state-box hidden">
+        <div class="spinner"></div>
+        <p>Yuklanmoqda…</p>
+      </div>
+
+      <div id="history-list" class="history-list"></div>
+
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- TAB 3: YUTUQ OLGANLAR RO'YXATI                               -->
+    <!-- ============================================================ -->
+    <section id="view-winners" class="tab-view">
+
+      <div class="view-header">
+        <h2>🏆 Yutuq olganlar</h2>
+        <p>Shu botda sovg'a yutib olgan barcha ishtirokchilar</p>
+      </div>
+
+      <div id="winners-total" class="winners-total hidden">
+        Jami <b id="winners-total-count">0</b> ta yutuq berilgan
+      </div>
+
+      <div id="winners-loading" class="state-box">
+        <div class="spinner"></div>
+        <p>Yuklanmoqda…</p>
+      </div>
+
+      <div id="winners-empty" class="state-box hidden">
+        <span class="state-icon">🏆</span>
+        <h3>Hali g'oliblar yo'q</h3>
+        <p>Birinchi bo'lib siz yutib olishingiz mumkin!</p>
+        <button class="btn-goto-spin" data-goto="spin">🎰 Barabanga o'tish</button>
+      </div>
+
+      <div id="winners-error" class="state-box hidden">
+        <span class="state-icon">⚠️</span>
+        <h3>Ro'yxatni yuklab bo'lmadi</h3>
+        <p>Internet aloqasini tekshiring.</p>
+        <button id="btn-retry-winners" class="btn-goto-spin">🔄 Qayta urinish</button>
+      </div>
+
+      <div id="winners-list" class="winners-list"></div>
+
+      <button id="btn-load-more-winners" class="btn-load-more hidden">
+        Yana ko'rsatish
+      </button>
+
+    </section>
+
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- PASTKI APPBAR                                                -->
+  <!-- ============================================================ -->
+  <nav class="appbar" role="tablist" aria-label="Asosiy bo'limlar">
+    <button class="appbar-item active" data-view="spin" role="tab" aria-selected="true">
+      <span class="appbar-icon">🎰</span>
+      <span class="appbar-label">Baraban</span>
+    </button>
+    <button class="appbar-item" data-view="history" role="tab" aria-selected="false">
+      <span class="appbar-icon">🎁</span>
+      <span class="appbar-label">Yutuqlarim</span>
+      <span id="history-badge" class="appbar-badge hidden">0</span>
+    </button>
+    <button class="appbar-item" data-view="winners" role="tab" aria-selected="false">
+      <span class="appbar-icon">🏆</span>
+      <span class="appbar-label">G'oliblar</span>
+    </button>
+  </nav>
+
+  <!-- STEP 1: GRAND VICTORY CELEBRATION MODAL -->
+  <div id="victory-modal" class="modal-overlay">
+    <div class="victory-card">
+      <div class="victory-banner">
+        🎉 TABRIKLAYMIZ! YUTUQ TUSHDI! 🎉
+      </div>
+
+      <p class="text-xs text-slate-300">Siz barabandan quyidagi qimmatbaho sovg'ani yutib oldingiz:</p>
+
+      <div id="victory-prize-box" class="victory-prize-display">
+        <img id="victory-prize-img" src="" alt="Prize" class="victory-prize-img" style="display:none;">
+        <div id="victory-prize-title" class="victory-prize-title">---</div>
+      </div>
+
+      <button id="btn-claim-victory" class="btn-claim-victory">
+        🎁 Yutuqni Qabul Qilish
+      </button>
+    </div>
+  </div>
+
+  <!-- STEP 2: LEAD FORM MODAL -->
+  <div id="lead-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="w-12 h-12 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center mx-auto mb-2 text-2xl">
+          📝
+        </div>
+        <h3>Yutuqni Rasmiylashtirish</h3>
+        <p>Yutuqni biriktirish uchun ism va telefon raqamingizni kiriting:</p>
+      </div>
+
+      <form id="lead-form">
+        <div class="form-group">
+          <label for="input-first-name">Ismingiz *</label>
+          <input type="text" id="input-first-name" class="form-control" placeholder="Ali" required>
+        </div>
+
+        <div class="form-group">
+          <label for="input-last-name">Familiyangiz</label>
+          <input type="text" id="input-last-name" class="form-control" placeholder="Valiyev">
+        </div>
+
+        <div class="form-group">
+          <label for="input-phone">Telefon raqamingiz *</label>
+          <div class="phone-field">
+            <span class="phone-prefix">+998</span>
+            <input type="tel" id="input-phone" class="form-control phone-input"
+                   placeholder="90 123 45 67" inputmode="numeric" autocomplete="tel-national"
+                   maxlength="12" required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-submit">
+          ✅ Yutuqni Saqlash
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- QR CODE VIEWER MODAL -->
+  <div id="qr-view-modal" class="modal-overlay">
+    <div class="modal-card flex flex-col items-center gap-4 text-center">
+      <div class="modal-header">
+        <h3 id="qr-modal-title">Yutuq QR-Kodi</h3>
+        <p class="text-xs text-slate-300">Texnopark xodimiga ushbu QR-kodni skanerlash uchun ko'rsating</p>
+      </div>
+
+      <div class="qr-box">
+        <div id="qr-modal-qrcode"></div>
+      </div>
+
+      <div class="flex flex-col items-center gap-1">
+        <span class="text-xs text-slate-400 uppercase tracking-widest font-bold">Promokod</span>
+        <div class="promo-badge">
+          <span id="qr-modal-promocode">TX-XXXX</span>
+        </div>
+      </div>
+
+      <!-- Sovg'ani olish manzili — admin paneldan kiritiladi -->
+      <div id="qr-location" class="qr-location hidden">
+        <div class="qr-location-head">
+          <span class="qr-location-pin">📍</span>
+          <span>Sovg'ani olish manzili</span>
+        </div>
+        <p id="qr-location-address" class="qr-location-address"></p>
+        <button type="button" id="btn-open-map" class="btn-open-map hidden">
+          🗺️ Google Maps'da ochish
+        </button>
+      </div>
+
+      <button id="btn-close-qr-modal" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-xl">
+        Yopish
+      </button>
+    </div>
+  </div>
+
+  <!-- Custom Scripts -->
+  <script src="/static/js/roulette.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

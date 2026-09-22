@@ -1,0 +1,136 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Sovg'alar{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>Sovg'alar</h2>
+    <p class="sub">Baraban lentasidagi sovg'alar, ularning rasmi va chiqish ehtimolligi</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'dashboard-prize-create' %}" class="btn btn-primary">+ Yangi sovg'a</a>
+  </div>
+</div>
+
+{% if prob.active_count == 0 %}
+  <div class="msg error" style="margin-bottom:1.1rem">
+    <span>⛔</span>
+    <span>Aktiv sovg'a yo'q — foydalanuvchilar baraban aylantira olmaydi.</span>
+  </div>
+{% elif prob.total_weight == 0 %}
+  <div class="msg error" style="margin-bottom:1.1rem">
+    <span>⛔</span>
+    <span>Barcha aktiv sovg'alarning ehtimolligi 0 — yutuq tanlanmaydi. Kamida bittasiga qiymat bering.</span>
+  </div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-title">
+    <span>Barcha sovg'alar ({{ prizes|length }})</span>
+    <span class="hint">
+      Aktiv og'irliklar yig'indisi: <b style="color:var(--text)">{{ prob.total_weight }}</b>
+      — foizlar shu yig'indiga nisbatan hisoblanadi
+    </span>
+  </div>
+
+  {% if prizes %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Sovg'a</th>
+            <th>Kategoriya</th>
+            <th>Rarity</th>
+            <th style="text-align:right">Og'irlik</th>
+            <th style="text-align:right">Chiqish %</th>
+            <th style="text-align:right">Muddat</th>
+            <th style="text-align:right">Yutuqlar</th>
+            <th>Holati</th>
+            <th style="text-align:right">Amallar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for prize in prizes %}
+            <tr>
+              <td>
+                <div class="cell-prize">
+                  <div class="prize-thumb">
+                    <span>{% if prize.rarity == 'LEGENDARY' %}🏆{% elif prize.rarity == 'EPIC' %}💎{% elif prize.rarity == 'RARE' %}🎁{% else %}⭐{% endif %}</span>
+                    {% if prize.display_image %}
+                      <img src="{{ prize.display_image }}" alt="" onerror="this.remove()">
+                    {% endif %}
+                  </div>
+                  <span class="td-strong">{{ prize.title }}</span>
+                </div>
+              </td>
+              <td>
+                {% if prize.category %}
+                  <span class="td-muted">{{ prize.category.display_icon }} {{ prize.category.title }}</span>
+                  {% if not prize.category.is_active %}
+                    <span class="badge off" title="Kategoriya o'chiq — sovg'a barabanda chiqmaydi">off</span>
+                  {% endif %}
+                {% else %}
+                  <span class="td-muted">—</span>
+                {% endif %}
+              </td>
+              <td><span class="badge {{ prize.rarity }}">{{ prize.rarity }}</span></td>
+              <td style="text-align:right" class="td-strong">{{ prize.probability }}</td>
+              <td style="text-align:right">
+                {% if prize.is_active and prob.total_weight %}
+                  <span class="td-strong">
+                    {% widthratio prize.probability prob.total_weight 100 %}%
+                  </span>
+                {% else %}
+                  <span class="td-muted">—</span>
+                {% endif %}
+              </td>
+              <td style="text-align:right" class="td-muted">{{ prize.valid_days }} kun</td>
+              <td style="text-align:right" class="td-muted">{{ prize.win_count }}</td>
+              <td>
+                {% if prize.is_active %}
+                  <span class="badge on">Aktiv</span>
+                {% else %}
+                  <span class="badge off">O'chiq</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="row-actions" style="justify-content:flex-end">
+                  <a href="{% url 'dashboard-prize-edit' prize.pk %}" class="btn btn-sm">✏️</a>
+
+                  <form method="post" action="{% url 'dashboard-prize-toggle' prize.pk %}" class="inline-form">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm"
+                            title="{% if prize.is_active %}O'chirish{% else %}Yoqish{% endif %}">
+                      {% if prize.is_active %}⏸{% else %}▶{% endif %}
+                    </button>
+                  </form>
+
+                  <form method="post" action="{% url 'dashboard-prize-delete' prize.pk %}" class="inline-form"
+                        onsubmit="return confirm('«{{ prize.title|escapejs }}» butunlay o\'chirilsinmi?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-danger"
+                            {% if prize.win_count %}disabled title="Yutuqlarga bog'langan — o'chirib bo'lmaydi"{% endif %}>
+                      🗑
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      <span class="icon">🎁</span>
+      Hali sovg'a qo'shilmagan.
+      <div style="margin-top:.9rem">
+        <a href="{% url 'dashboard-prize-create' %}" class="btn btn-primary btn-sm">Birinchi sovg'ani qo'shish</a>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

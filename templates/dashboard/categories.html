@@ -1,0 +1,110 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Kategoriyalar{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>Kategoriyalar</h2>
+    <p class="sub">Sovg'alarni guruhlash uchun kategoriyalar</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'dashboard-category-create' %}" class="btn btn-primary">+ Yangi kategoriya</a>
+  </div>
+</div>
+
+<div class="msg info" style="margin-bottom:1.1rem">
+  <span>ℹ️</span>
+  <span>
+    Kategoriya barabanning ishlashini o'zgartirmaydi — barcha sovg'alar bitta lentada qoladi.
+    Lekin kategoriya <b>o'chirilsa</b>, undagi sovg'alar barabandan olib tashlanadi.
+  </span>
+</div>
+
+<div class="panel">
+  <div class="panel-title">
+    <span>Barcha kategoriyalar ({{ categories|length }})</span>
+    {% if uncategorized_count %}
+      <span class="hint">Kategoriyasiz sovg'alar: <b style="color:var(--text)">{{ uncategorized_count }}</b> ta</span>
+    {% endif %}
+  </div>
+
+  {% if categories %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Kategoriya</th>
+            <th>Tavsifi</th>
+            <th style="text-align:right">Tartib</th>
+            <th style="text-align:right">Sovg'alar</th>
+            <th>Holati</th>
+            <th style="text-align:right">Amallar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cat in categories %}
+            <tr>
+              <td>
+                <div class="cell-prize">
+                  <div class="prize-thumb">
+                    <span>{{ cat.display_icon }}</span>
+                    {% if cat.display_image %}
+                      <img src="{{ cat.display_image }}" alt="" onerror="this.remove()">
+                    {% endif %}
+                  </div>
+                  <span class="td-strong">{{ cat.title }}</span>
+                </div>
+              </td>
+              <td class="td-muted">{{ cat.description|default:"—"|truncatechars:60 }}</td>
+              <td style="text-align:right" class="td-muted">{{ cat.sort_order }}</td>
+              <td style="text-align:right">
+                <span class="td-strong">{{ cat.prize_count }}</span>
+                {% if cat.prize_count != cat.active_prize_count %}
+                  <span class="td-muted">({{ cat.active_prize_count }} aktiv)</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if cat.is_active %}
+                  <span class="badge on">Aktiv</span>
+                {% else %}
+                  <span class="badge off">O'chiq</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="row-actions" style="justify-content:flex-end">
+                  <a href="{% url 'dashboard-category-edit' cat.pk %}" class="btn btn-sm">✏️</a>
+
+                  <form method="post" action="{% url 'dashboard-category-toggle' cat.pk %}" class="inline-form">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm"
+                            title="{% if cat.is_active %}O'chirish{% else %}Yoqish{% endif %}">
+                      {% if cat.is_active %}⏸{% else %}▶{% endif %}
+                    </button>
+                  </form>
+
+                  <form method="post" action="{% url 'dashboard-category-delete' cat.pk %}" class="inline-form"
+                        onsubmit="return confirm('«{{ cat.title|escapejs }}» o\'chirilsinmi?{% if cat.prize_count %} {{ cat.prize_count }} ta sovg\'a kategoriyasiz holatga o\'tadi (sovg\'alar o\'chmaydi).{% endif %}');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-danger" title="O'chirish">🗑</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      <span class="icon">📦</span>
+      Hali kategoriya qo'shilmagan.
+      <div style="margin-top:.9rem">
+        <a href="{% url 'dashboard-category-create' %}" class="btn btn-primary btn-sm">Birinchi kategoriyani qo'shish</a>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}
