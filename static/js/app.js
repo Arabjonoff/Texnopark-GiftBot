@@ -720,7 +720,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnShareTg.addEventListener('click', () => {
       const link = refLinkInput.value;
       const shareText = encodeURIComponent(
-        "🚀 Yoshlar Texnoparki CS2 Skin Roulette barabanida ishtirok eting va qimmatbaho yutuqlarni yutib oling!"
+        "🚀 Yoshlar Texnoparki Gift Box barabanida ishtirok eting va qimmatbaho yutuqlarni yutib oling!"
       );
       const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${shareText}`;
 
