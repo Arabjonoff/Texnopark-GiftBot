@@ -22,6 +22,9 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from app_main.dashboard_services import (
+    cancel_open_winnings,
+    get_suspicious_leads,
+    reset_unused_spins,
     get_daily_chart,
     get_dashboard_stats,
     get_funnel,
@@ -574,6 +577,10 @@ def winning_activate(request, pk):
 
     if winning.status == WinningResult.Status.USED:
         messages.error(request, winning.promo_code + " allaqachon ishlatilgan.")
+    elif winning.status == WinningResult.Status.CANCELLED:
+        messages.error(request, winning.promo_code + " bekor qilingan — sovg'a berilmaydi.")
+    elif winning.lead.is_banned:
+        messages.error(request, winning.promo_code + " egasi bloklangan — sovg'a berilmaydi.")
     elif winning.status == WinningResult.Status.PENDING:
         messages.error(request, winning.promo_code + " hali rasmiylashtirilmagan (o'quvchi formani yubormagan).")
     elif winning.is_expired():
@@ -797,6 +804,56 @@ def broadcast_cancel(request, pk):
         removed = cancel_broadcast(broadcast)
         messages.success(request, "To'xtatildi. {0} ta xabar yuborilmay qoldi.".format(removed))
     return redirect('dashboard-broadcasts')
+
+
+# ---------------------------------------------------------------- Shubhali foydalanuvchilar
+
+@staff_required
+def suspicious_list(request):
+    rows, threshold = get_suspicious_leads()
+    return render(request, 'dashboard/suspicious.html', {
+        'active_page': 'suspicious',
+        'rows': rows,
+        'threshold': threshold,
+        'site': SiteSettings.load(),
+    })
+
+
+@staff_required
+@require_POST
+def lead_reset_spins(request, pk):
+    lead = get_object_or_404(StudentLead, pk=pk)
+    removed = reset_unused_spins(lead, request.user)
+    if removed:
+        messages.success(request, "{0}: {1} ta ishlatilmagan spin olib tashlandi.".format(lead.first_name, removed))
+    else:
+        messages.success(request, "{0}: ishlatilmagan spin yo'q.".format(lead.first_name))
+    return redirect(_safe_next(request, fallback='/dashboard/suspicious/'))
+
+
+@staff_required
+@require_POST
+def lead_cancel_winnings(request, pk):
+    lead = get_object_or_404(StudentLead, pk=pk)
+    count = cancel_open_winnings(lead)
+    messages.success(
+        request,
+        "{0}: {1} ta olib ketilmagan yutuq bekor qilindi.".format(lead.first_name, count)
+    )
+    return redirect(_safe_next(request, fallback='/dashboard/suspicious/'))
+
+
+@staff_required
+@require_POST
+def lead_ban_toggle(request, pk):
+    lead = get_object_or_404(StudentLead, pk=pk)
+    lead.is_banned = not lead.is_banned
+    lead.save(update_fields=['is_banned'])
+    if lead.is_banned:
+        messages.success(request, "{0} bloklandi — endi aylantira olmaydi va sovg'a ololmaydi.".format(lead.first_name))
+    else:
+        messages.success(request, "{0} blokdan chiqarildi.".format(lead.first_name))
+    return redirect(_safe_next(request, fallback='/dashboard/suspicious/'))
 
 
 # ---------------------------------------------------------------- Sozlamalar

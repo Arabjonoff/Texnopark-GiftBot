@@ -214,6 +214,8 @@ class StudentLead(models.Model):
     bot_blocked = models.BooleanField(default=False, verbose_name="Botni bloklagan")
     # Kunlik bonus oxirgi marta olingan sana (Toshkent vaqti bo'yicha)
     last_daily_bonus = models.DateField(null=True, blank=True, verbose_name="Oxirgi kunlik bonus")
+    # Bloklangan ishtirokchi barabanni aylantira olmaydi va yutuq rasmiylashtira olmaydi
+    is_banned = models.BooleanField(default=False, verbose_name="Bloklangan")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Yaratilgan vaqti")
 
     class Meta:
@@ -234,6 +236,8 @@ class WinningResult(models.Model):
         ACTIVE = 'ACTIVE', 'Aktiv'
         USED = 'USED', 'Ishlatilgan'
         EXPIRED = 'EXPIRED', 'Muddati o\'tgan'
+        # Xodim bekor qilgan (masalan, firibgarlik aniqlanganda) — sovg'a berilmaydi
+        CANCELLED = 'CANCELLED', 'Bekor qilingan'
 
     lead = models.ForeignKey(
         StudentLead,
@@ -425,6 +429,21 @@ class SiteSettings(models.Model):
         default=3,
         verbose_name="Necha do'st = +1 aylantirish"
     )
+    max_wins_total = models.PositiveSmallIntegerField(
+        default=3,
+        verbose_name="Bir odamga jami yutuq limiti",
+        help_text="Qo'shimcha spinlar qancha bo'lishidan qat'i nazar. 0 — cheklanmagan"
+    )
+    max_wins_per_day = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name="Bir odamga kunlik yutuq limiti",
+        help_text="0 — cheklanmagan"
+    )
+    unique_phone_required = models.BooleanField(
+        default=True,
+        verbose_name="Bitta telefon — bitta ishtirokchi",
+        help_text="Raqam boshqa akkauntda yutuq olgan bo'lsa, yangi yutuq rasmiylashtirilmaydi"
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -494,3 +513,37 @@ class RequiredChannel(models.Model):
         if self.chat_id.startswith('@'):
             return f"https://t.me/{self.chat_id[1:]}"
         return ''
+
+
+class SpinGrant(models.Model):
+    """
+    Qo'shimcha aylantirishlar tarixi. StudentLead.extra_spins faqat
+    services.grant_spins() orqali o'zgaradi va har o'zgarish shu yerga yoziladi —
+    shunda spin qayerdan kelgani doim ma'lum bo'ladi.
+    """
+
+    class Reason(models.TextChoices):
+        REFERRAL = 'REFERRAL', "Do'st taklifi"
+        DAILY_BONUS = 'DAILY_BONUS', "Kunlik bonus"
+        STAFF = 'STAFF', "Xodim tomonidan"
+        LEGACY = 'LEGACY', "v1.3.1 gacha berilgan (manbasi noma'lum)"
+
+    lead = models.ForeignKey(
+        StudentLead, on_delete=models.CASCADE, related_name='spin_grants', verbose_name="O'quvchi"
+    )
+    amount = models.IntegerField(verbose_name="Miqdor", help_text="Manfiy — olib tashlangan")
+    reason = models.CharField(max_length=20, choices=Reason.choices, verbose_name="Sabab")
+    note = models.CharField(max_length=255, blank=True, verbose_name="Izoh")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='spin_grants', verbose_name="Xodim"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vaqti")
+
+    class Meta:
+        verbose_name = "Spin tarixi"
+        verbose_name_plural = "Spinlar tarixi"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.lead_id}: {self.amount:+d} ({self.get_reason_display()})"

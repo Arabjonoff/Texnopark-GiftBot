@@ -19,9 +19,18 @@ from app_main.models import BotMessage, Broadcast, Prize, RequiredChannel, SiteS
 from app_main.services import verify_telegram_init_data, process_referral
 
 @override_settings(ALLOW_MOCK_INIT_DATA=True)
+def disable_win_limits():
+    """Limitlarga aloqasi yo'q testlar uchun: yutuq limitlarini o'chiradi."""
+    cache.clear()
+    site = SiteSettings.load()
+    site.max_wins_total = 0
+    site.max_wins_per_day = 0
+    site.save()
+
+
 class TexnoparkMiniAppApiTests(TestCase):
     def setUp(self):
-        cache.clear()
+        disable_win_limits()
         self.client = APIClient()
         
         self.prize_common = Prize.objects.create(
@@ -47,7 +56,7 @@ class TexnoparkMiniAppApiTests(TestCase):
         self.client.post(reverse('api-spin'), {'init_data': init}, format='json')
         resp = self.client.post(
             reverse('api-claim-prize'),
-            {'init_data': init, 'first_name': 'Friend', 'phone_number': '+998901112233'},
+            {'init_data': init, 'first_name': 'Friend', 'phone_number': '+99890{0:07d}'.format(friend_id % 10 ** 7)},
             format='json',
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
@@ -575,7 +584,7 @@ class SubscriptionCampaignBonusTests(TestCase):
     """Majburiy obuna, aksiya muddati, kunlik bonus va referal reytingi."""
 
     def setUp(self):
-        cache.clear()
+        disable_win_limits()
         self.client = APIClient()
         Prize.objects.create(title="P", rarity=Prize.Rarity.COMMON, probability=10)
         self.channel = RequiredChannel.objects.create(title="Texnopark", chat_id="@texnopark_uz")
@@ -710,6 +719,9 @@ class DashboardSettingsTests(TestCase):
             'campaign_closed_message': '  Tugadi  ',
             'daily_bonus_enabled': 'on',
             'referrals_per_spin': 5,
+            'max_wins_total': 4,
+            'max_wins_per_day': 2,
+            'unique_phone_required': 'on',
         })
         self.assertEqual(resp.status_code, 302)
         site = SiteSettings.load()
@@ -723,6 +735,8 @@ class DashboardSettingsTests(TestCase):
             'campaign_start': '2026-10-10T09:00',
             'campaign_end': '2026-10-01T09:00',
             'referrals_per_spin': 3,
+            'max_wins_total': 3,
+            'max_wins_per_day': 1,
         })
         self.assertEqual(resp.status_code, 200)
         self.assertIn('campaign_end', resp.context['form'].errors)
@@ -803,3 +817,128 @@ class TokenRedactionTests(TestCase):
         RedactTokenFilter('555:SECRET-TOKEN').filter(record)
         self.assertNotIn('SECRET-TOKEN', record.getMessage())
         self.assertEqual(logging.getLogger('httpx').level, logging.WARNING)
+
+
+
+@override_settings(ALLOW_MOCK_INIT_DATA=True)
+class AntiAbuseTests(TestCase):
+    """Yutuq limitlari, bitta telefon, spin tarixi va shubhalilar sahifasi."""
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.prize = Prize.objects.create(title="P", rarity=Prize.Rarity.COMMON, probability=10, stock=10)
+        self.site = SiteSettings.load()
+        self.site.max_wins_total = 3
+        self.site.max_wins_per_day = 0
+        self.site.save()
+
+    def _spin_and_claim(self, tg_id, phone):
+        init = 'mock_{0}_U'.format(tg_id)
+        spin = self.client.post(reverse('api-spin'), {'init_data': init}, format='json')
+        if spin.status_code != 200:
+            return spin
+        return self.client.post(reverse('api-claim-prize'), {
+            'init_data': init, 'first_name': 'U', 'phone_number': phone,
+        }, format='json')
+
+    def test_total_limit_beats_extra_spins(self):
+        StudentLead.objects.create(telegram_id=1, first_name='U', phone_number='', extra_spins=50)
+        for _ in range(3):
+            self.assertEqual(self._spin_and_claim(1, '+998901111111').status_code, 201)
+        resp = self.client.post(reverse('api-spin'), {'init_data': 'mock_1_U'}, format='json')
+        self.assertEqual((resp.status_code, resp.data['code']), (403, 'total_limit'))
+        val = self.client.post(reverse('api-validate-init'), {'init_data': 'mock_1_U'}, format='json')
+        self.assertEqual(val.data['available_spins'], 0)
+        self.assertEqual(val.data['spin_block']['code'], 'total_limit')
+
+    def test_daily_limit(self):
+        self.site.max_wins_total = 0
+        self.site.max_wins_per_day = 1
+        self.site.save()
+        StudentLead.objects.create(telegram_id=1, first_name='U', phone_number='', extra_spins=5)
+        self.assertEqual(self._spin_and_claim(1, '+998901111111').status_code, 201)
+        resp = self.client.post(reverse('api-spin'), {'init_data': 'mock_1_U'}, format='json')
+        self.assertEqual(resp.data['code'], 'daily_limit')
+        # Kechagi yutuqlar bugungi limitga kirmaydi
+        WinningResult.objects.update(created_at=timezone.now() - timedelta(days=1))
+        self.assertEqual(self._spin_and_claim(1, '+998901111111').status_code, 201)
+
+    def test_same_phone_on_second_account_rejected(self):
+        self.assertEqual(self._spin_and_claim(1, '+998 90 111 11 11').status_code, 201)
+        resp = self._spin_and_claim(2, '901111111')
+        self.assertEqual((resp.status_code, resp.data['code']), (400, 'phone_taken'))
+        # O'chirib qo'yilsa ruxsat beriladi
+        self.site.unique_phone_required = False
+        self.site.save()
+        resp = self.client.post(reverse('api-claim-prize'), {
+            'init_data': 'mock_2_U', 'first_name': 'U', 'phone_number': '901111111',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+
+    def test_banned_user_cannot_spin_or_redeem(self):
+        self.assertEqual(self._spin_and_claim(1, '+998901111111').status_code, 201)
+        lead = StudentLead.objects.get(telegram_id=1)
+        lead.is_banned = True
+        lead.extra_spins = 5
+        lead.save()
+        resp = self.client.post(reverse('api-spin'), {'init_data': 'mock_1_U'}, format='json')
+        self.assertEqual(resp.data['code'], 'banned')
+
+        staff = User.objects.create_user('kassir', password='pass-12345-x', is_staff=True)
+        self.client.force_authenticate(staff)
+        code = WinningResult.objects.get().promo_code
+        resp = self.client.post(reverse('api-admin-verify-code'), {'promo_code': code, 'confirm': True}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_every_extra_spin_is_logged(self):
+        from app_main.models import SpinGrant
+        self.site.daily_bonus_enabled = True
+        self.site.referrals_per_spin = 1
+        self.site.save()
+        self.client.post(reverse('api-daily-bonus'), {'init_data': 'mock_1_U'}, format='json')
+        process_referral(1, 2, 'Do')
+        self._spin_and_claim(2, '+998902222222')
+        lead = StudentLead.objects.get(telegram_id=1)
+        reasons = sorted(lead.spin_grants.values_list('reason', flat=True))
+        self.assertEqual(reasons, [SpinGrant.Reason.DAILY_BONUS, SpinGrant.Reason.REFERRAL])
+        self.assertEqual(lead.extra_spins, sum(lead.spin_grants.values_list('amount', flat=True)))
+
+    def test_dashboard_suspicious_actions(self):
+        from app_main.models import SpinGrant
+        staff = User.objects.create_user('xodim', password='dash-pass-12345', is_staff=True)
+        self.site.max_wins_total = 0
+        self.site.save()
+        lead = StudentLead.objects.create(telegram_id=1, first_name='Kop', phone_number='+998901111111', extra_spins=9)
+        twin = StudentLead.objects.create(telegram_id=2, first_name='Egiz', phone_number='901111111')
+        for i in range(3):
+            WinningResult.objects.create(
+                lead=lead, prize=self.prize, promo_code='TX-SUS00{0}'.format(i),
+                status=WinningResult.Status.ACTIVE, expires_at=timezone.now() + timedelta(days=3),
+            )
+        self.prize.stock = 7
+        self.prize.save()
+
+        self.client.force_login(staff)
+        resp = self.client.get(reverse('dashboard-suspicious'))
+        self.assertEqual(resp.status_code, 200)
+        ids = {row['lead'].telegram_id for row in resp.context['rows']}
+        self.assertEqual(ids, {1, 2})
+        row = next(r for r in resp.context['rows'] if r['lead'].telegram_id == 1)
+        self.assertIn('9 ta manbasiz spin', row['flags'])
+
+        self.client.post(reverse('dashboard-lead-reset-spins', args=[lead.pk]))
+        lead.refresh_from_db()
+        self.assertEqual(lead.extra_spins, 2)  # 3 ta yutuqqa yetadigani qoladi
+        self.assertEqual(lead.spin_grants.get(reason=SpinGrant.Reason.STAFF).amount, -7)
+
+        self.client.post(reverse('dashboard-lead-cancel-winnings', args=[lead.pk]))
+        self.assertEqual(lead.winnings.filter(status=WinningResult.Status.CANCELLED).count(), 3)
+        self.prize.refresh_from_db()
+        self.assertEqual(self.prize.stock, 10)  # omborga qaytdi
+
+        self.client.post(reverse('dashboard-lead-ban', args=[twin.pk]))
+        twin.refresh_from_db()
+        self.assertTrue(twin.is_banned)
+        # Bekor qilingan yutuqlar ochiq ro'yxatda ko'rinmaydi
+        self.assertEqual(self.client.get(reverse('api-winners')).data['total'], 0)

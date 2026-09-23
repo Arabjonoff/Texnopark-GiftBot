@@ -140,6 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Server tekshiradigan shartlar — UI shunga qarab tugma holatini tanlaydi
   let subscription = { ok: true, channels: [] };
   let campaign = { state: 'active', message: '' };
+  let spinBlock = null;         // yutuq limiti yoki blok: { code, message }
   let dailyBonus = { enabled: false, available: false };
   let checkingSubscription = false;
 
@@ -353,6 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
     savedProfile = data.saved_profile || savedProfile;
     if (data.subscription) subscription = data.subscription;
     if (data.campaign) campaign = data.campaign;
+    if ('spin_block' in data) spinBlock = data.spin_block;
     if (data.daily_bonus) dailyBonus = data.daily_bonus;
 
     if (spinsCountBadge) spinsCountBadge.innerText = userAvailableSpins;
@@ -448,6 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
     subscribe: { text: 'Obunani tekshirish', icon: 'refresh', pulse: true },
     checking: { text: 'Tekshirilmoqda…', icon: 'refresh', disabled: true },
     closed: { text: 'Aksiya yopiq', icon: 'lock', disabled: true, secondary: true },
+    limit: { text: 'Limit tugadi', icon: 'lock', disabled: true, secondary: true },
     retry: { text: 'Qayta urinish', icon: 'refresh' },
   };
 
@@ -471,6 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tushgan sovg'ani rasmiylashtirish har doim mumkin — aksiya tugagan bo'lsa ham
     if (currentWonPrize) setSpinButton('claim');
     else if (campaign.state !== 'active') setSpinButton('closed');
+    else if (spinBlock) setSpinButton('limit');
     else if (!subscription.ok) setSpinButton(checkingSubscription ? 'checking' : 'subscribe');
     else if (userAvailableSpins > 0) setSpinButton('spin');
     else setSpinButton('invite');
@@ -513,6 +517,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.code === 'not_subscribed' && data.subscription) {
           subscription = data.subscription;
           renderSubscription();
+        }
+        if (['total_limit', 'daily_limit', 'banned'].includes(data.code)) {
+          spinBlock = { code: data.code, message: data.error };
+          renderCampaign();
         }
         if (data.code === 'campaign_closed' && data.campaign) {
           campaign = data.campaign;
@@ -656,6 +664,18 @@ document.addEventListener('DOMContentLoaded', () => {
     inputPhone.focus();
   });
 
+  const PHONE_FORMAT_ERROR = phoneError ? phoneError.textContent : '';
+
+  /** Telefon maydoni ostida xato (format yoki serverdan kelgan sabab) */
+  function showPhoneError(message) {
+    phoneError.textContent = message || PHONE_FORMAT_ERROR;
+    hide(savedProfileBox);
+    show(profileFields);
+    inputPhone.classList.add('is-invalid');
+    show(phoneError);
+    haptic.notify('error');
+  }
+
   function getPhoneDigits() {
     return inputPhone.value.replace(/\D/g, '').slice(0, 9);
   }
@@ -704,10 +724,7 @@ document.addEventListener('DOMContentLoaded', () => {
       hide(savedProfileBox);
       show(profileFields);
       if (!firstName) inputFirstName.classList.add('is-invalid');
-      if (phoneDigits.length !== 9) {
-        inputPhone.classList.add('is-invalid');
-        show(phoneError);
-      }
+      if (phoneDigits.length !== 9) showPhoneError();
       haptic.notify('error');
       (!firstName ? inputFirstName : inputPhone).focus();
       return;
@@ -730,8 +747,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!resp.ok) {
         toast(data.error || "Ma'lumotlarni saqlashda xatolik");
+        // Raqam band — forma ochiq qoladi, foydalanuvchi o'z raqamini kiritadi
+        if (data.code === 'phone_taken' || data.code === 'phone_invalid') {
+          showPhoneError(data.error);
+          return;
+        }
         // Server holati o'zgargan bo'lishi mumkin (masalan, boshqa qurilmada rasmiylashtirilgan)
-        if (resp.status === 400) {
+        if (resp.status === 400 || resp.status === 403) {
           closeModal(leadModal);
           loadUserState().catch(() => {});
         }
@@ -764,7 +786,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const STATUS_LABELS = {
     ACTIVE: 'Aktiv',
     USED: 'Berilgan',
-    EXPIRED: "Muddati o'tgan"
+    EXPIRED: "Muddati o'tgan",
+    CANCELLED: 'Bekor qilingan'
   };
 
   function prizeThumb(prize, className) {
@@ -1042,12 +1065,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---------------------------------------------------------------- Aksiya muddati
 
+  // Aksiya yopiqligi yoki yutuq limiti — bitta ogohlantirish kartasida
   function renderCampaign() {
-    if (campaign.state === 'active' || !campaign.message) {
+    const message = campaign.state !== 'active'
+      ? campaign.message
+      : (spinBlock && !currentWonPrize ? spinBlock.message : '');
+    if (!message) {
       hide(campaignBanner);
       return;
     }
-    campaignMessage.textContent = campaign.message;
+    campaignMessage.textContent = message;
     show(campaignBanner);
   }
 
@@ -1063,7 +1090,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderSubscription() {
     // Sovg'a kutib turgan yoki aksiya yopiq bo'lsa, obuna so'rashning ma'nosi yo'q
-    const needed = !subscription.ok && !currentWonPrize && campaign.state === 'active' && !!initDataRaw;
+    const needed = !subscription.ok && !currentWonPrize && campaign.state === 'active' && !spinBlock && !!initDataRaw;
     if (!needed) {
       hide(subscribeGate);
       return;

@@ -27,6 +27,10 @@ urlpatterns = [
     # O'quvchilar
     path('leads/', views.lead_list, name='dashboard-leads'),
     path('leads/export/', views.lead_export, name='dashboard-leads-export'),
+    path('leads/<int:pk>/reset-spins/', views.lead_reset_spins, name='dashboard-lead-reset-spins'),
+    path('leads/<int:pk>/cancel-winnings/', views.lead_cancel_winnings, name='dashboard-lead-cancel-winnings'),
+    path('leads/<int:pk>/ban/', views.lead_ban_toggle, name='dashboard-lead-ban'),
+    path('suspicious/', views.suspicious_list, name='dashboard-suspicious'),
 
     # Yutuqlar
     path('winnings/', views.winning_list, name='dashboard-winnings'),

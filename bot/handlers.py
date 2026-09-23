@@ -225,7 +225,7 @@ async def my_prizes_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    status_icons = {'ACTIVE': '🟢', 'USED': '✅', 'EXPIRED': '⌛'}
+    status_icons = {'ACTIVE': '🟢', 'USED': '✅', 'EXPIRED': '⌛', 'CANCELLED': '🚫'}
     lines = ["🎁 **Sizning yutuqlaringiz:**", ""]
     map_buttons = []
 

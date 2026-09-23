@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260923c">
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260923d">
   {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -56,6 +56,11 @@
       <a href="{% url 'dashboard-winnings' %}" class="nav-item {% if active_page == 'winnings' %}active{% endif %}"
          {% if active_page == 'winnings' %}aria-current="page"{% endif %}>
         <svg class="ic"><use href="#ic-trophy"/></svg> Yutuqlar
+      </a>
+
+      <a href="{% url 'dashboard-suspicious' %}" class="nav-item {% if active_page == 'suspicious' %}active{% endif %}"
+         {% if active_page == 'suspicious' %}aria-current="page"{% endif %}>
+        <svg class="ic"><use href="#ic-shield"/></svg> Shubhalilar
       </a>
 
       <div class="nav-label">Amallar</div>

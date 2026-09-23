@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db.models import Count, F, Q
 from django.utils import timezone
 from datetime import timedelta
-from app_main.models import Prize, SiteSettings, StudentLead, WinningResult
+from app_main.models import Prize, SiteSettings, SpinGrant, StudentLead, WinningResult
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +177,12 @@ def check_user_spin_status(telegram_id: int) -> tuple[int, StudentLead | None, l
     )
     allowed_total = 1 + lead.extra_spins
     available_spins = max(0, allowed_total - len(all_winnings))
-    winnings = [w for w in all_winnings if w.status != WinningResult.Status.PENDING]
+    # Yutuq limitlari qo'shimcha spinlardan ustun turadi
+    available_spins = min(available_spins, spins_left_by_limits(lead))
+    winnings = [
+        w for w in all_winnings
+        if w.status not in (WinningResult.Status.PENDING, WinningResult.Status.CANCELLED)
+    ]
 
     return available_spins, lead, winnings
 
@@ -196,6 +201,110 @@ def get_pending_winning(lead: StudentLead | None) -> WinningResult | None:
 
 class NoSpinsLeft(Exception):
     pass
+
+
+class SpinBlocked(Exception):
+    """Bloklangan yoki yutuq limitiga yetgan foydalanuvchi — yangi spin berilmaydi."""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _limit_counted_winnings(lead):
+    # Bekor qilingan yutuq limitga kirmaydi (xato bilan bekor qilingan bo'lsa, joy qaytadi)
+    return lead.winnings.exclude(status=WinningResult.Status.CANCELLED)
+
+
+def spin_block_reason(lead, site=None):
+    """
+    Yangi spin nima uchun berilmasligini qaytaradi: (code, matn) yoki None.
+    Bu tekshiruv extra_spins'dan qat'i nazar ishlaydi — spin qayerdan kelgan
+    bo'lmasin, bir odam limitdan ko'p sovg'a ololmaydi.
+    """
+    if not lead:
+        return None
+    if lead.is_banned:
+        return 'banned', "Hisobingiz vaqtincha bloklangan. Savollar bo'lsa, Texnopark xodimlariga murojaat qiling."
+
+    site = site or SiteSettings.load()
+    counted = _limit_counted_winnings(lead)
+    if site.max_wins_total and counted.count() >= site.max_wins_total:
+        return 'total_limit', (
+            f"Siz maksimal {site.max_wins_total} ta sovg'a yutib oldingiz. "
+            f"Ishtirokingiz uchun rahmat!"
+        )
+    if site.max_wins_per_day and counted.filter(created_at__date=timezone.localdate()).count() >= site.max_wins_per_day:
+        return 'daily_limit', "Bugungi limit tugadi. Ertaga yana urinib ko'ring!"
+    return None
+
+
+def spins_left_by_limits(lead, site=None) -> int:
+    """Limitlar bo'yicha yana nechta spin mumkin (cheklanmagan bo'lsa — katta son)."""
+    if lead.is_banned:
+        return 0
+    site = site or SiteSettings.load()
+    left = 10 ** 6
+    counted = _limit_counted_winnings(lead)
+    if site.max_wins_total:
+        left = min(left, site.max_wins_total - counted.count())
+    if site.max_wins_per_day:
+        left = min(left, site.max_wins_per_day - counted.filter(created_at__date=timezone.localdate()).count())
+    return max(0, left)
+
+
+def grant_spins(lead, amount, reason, note='', created_by=None) -> int:
+    """
+    extra_spins'ni o'zgartirishning YAGONA yo'li — har o'zgarish SpinGrant'ga
+    yoziladi. Tranzaksiya ichida chaqirilishi kerak. Balans manfiy bo'lmaydi.
+    Returns haqiqatda qo'llangan o'zgarish.
+    """
+    lead.refresh_from_db(fields=['extra_spins'])
+    new_value = max(0, lead.extra_spins + amount)
+    delta = new_value - lead.extra_spins
+    if delta == 0:
+        return 0
+    lead.extra_spins = new_value
+    lead.save(update_fields=['extra_spins'])
+    SpinGrant.objects.create(
+        lead=lead,
+        amount=delta,
+        reason=reason,
+        note=note[:255],
+        created_by=created_by if created_by and created_by.is_authenticated else None,
+    )
+    return delta
+
+
+def phone_digits(phone) -> str:
+    """Taqqoslash uchun raqamning oxirgi 9 ta raqami (+998 90 123 45 67 -> 901234567)."""
+    digits = ''.join(ch for ch in (phone or '') if ch.isdigit())
+    return digits[-9:]
+
+
+def normalize_phone(phone) -> str:
+    """Yagona saqlash formati: +998XXXXXXXXX. 9 ta raqam chiqmasa — bo'sh satr."""
+    digits = ''.join(ch for ch in (phone or '') if ch.isdigit())
+    if len(digits) == 12 and digits.startswith('998'):
+        digits = digits[3:]
+    return '+998' + digits if len(digits) == 9 else ''
+
+
+def phone_used_by_other(lead, phone) -> bool:
+    """Shu raqam bilan boshqa akkaunt allaqachon yutuq rasmiylashtirganmi."""
+    digits = phone_digits(phone)
+    if len(digits) != 9:
+        return False
+    return (
+        StudentLead.objects
+        .exclude(pk=lead.pk)
+        .filter(phone_number__endswith=digits)
+        .filter(winnings__status__in=[
+            WinningResult.Status.ACTIVE, WinningResult.Status.USED, WinningResult.Status.EXPIRED,
+        ])
+        .exists()
+    )
 
 
 class CampaignClosed(Exception):
@@ -247,9 +356,16 @@ def start_spin(telegram_id: int, user_data: dict) -> tuple[WinningResult, bool]:
             },
         )
 
+        if lead.is_banned:
+            raise SpinBlocked(*spin_block_reason(lead))
+
         pending = get_pending_winning(lead)
         if pending:
             return pending, False
+
+        blocked = spin_block_reason(lead)
+        if blocked:
+            raise SpinBlocked(*blocked)
 
         state = SiteSettings.load().campaign_state()
         if state != 'active':
@@ -335,8 +451,10 @@ def confirm_referral(lead: StudentLead) -> tuple[StudentLead | None, bool]:
 
     spin_awarded = confirmed_referrals(referrer).count() % referrals_per_spin() == 0
     if spin_awarded:
-        referrer.extra_spins += 1
-        referrer.save(update_fields=['extra_spins'])
+        grant_spins(
+            referrer, 1, SpinGrant.Reason.REFERRAL,
+            note=f"Do'st: {lead.first_name} (tg {lead.telegram_id})",
+        )
 
     return referrer, spin_awarded
 
@@ -363,11 +481,11 @@ def claim_daily_bonus(telegram_id: int, user_data: dict) -> bool:
                 'phone_number': "",
             },
         )
-        if not daily_bonus_available(lead):
+        if lead.is_banned or not daily_bonus_available(lead):
             return False
         lead.last_daily_bonus = today
-        lead.extra_spins += 1
-        lead.save(update_fields=['last_daily_bonus', 'extra_spins'])
+        lead.save(update_fields=['last_daily_bonus'])
+        grant_spins(lead, 1, SpinGrant.Reason.DAILY_BONUS, note=str(today))
     return True
 
 

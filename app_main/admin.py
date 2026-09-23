@@ -2,7 +2,8 @@ import csv
 from django.contrib import admin
 from django.http import HttpResponse
 from app_main.models import (
-    BotMessage, Broadcast, Prize, PrizeCategory, RequiredChannel, SiteSettings, StudentLead, WinningResult,
+    BotMessage, Broadcast, Prize, PrizeCategory, RequiredChannel, SiteSettings, SpinGrant, StudentLead,
+    WinningResult,
 )
 
 def export_as_csv(modeladmin, request, queryset):
@@ -43,8 +44,11 @@ class PrizeAdmin(admin.ModelAdmin):
 
 @admin.register(StudentLead)
 class StudentLeadAdmin(admin.ModelAdmin):
-    list_display = ('id', 'telegram_id', 'first_name', 'last_name', 'phone_number', 'bot_blocked', 'created_at')
-    list_filter = ('created_at',)
+    list_display = ('id', 'telegram_id', 'first_name', 'last_name', 'phone_number', 'extra_spins',
+                    'is_banned', 'bot_blocked', 'created_at')
+    list_filter = ('is_banned', 'bot_blocked', 'created_at')
+    # Qo'shimcha spinlar faqat tizim orqali (tarixi bilan) o'zgaradi — qo'lda tahrirlanmaydi
+    readonly_fields = ('extra_spins', 'referral_confirmed_at', 'last_daily_bonus')
     search_fields = ('first_name', 'last_name', 'phone_number', 'telegram_id')
     actions = [export_as_csv]
 
@@ -94,6 +98,23 @@ class SiteSettingsAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         # Yagona qator — SiteSettings.load() yaratadi
         return not SiteSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SpinGrant)
+class SpinGrantAdmin(admin.ModelAdmin):
+    list_display = ('id', 'lead', 'amount', 'reason', 'note', 'created_by', 'created_at')
+    list_filter = ('reason',)
+    search_fields = ('lead__telegram_id', 'lead__first_name', 'note')
+
+    # Tarix — faqat o'qish uchun
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
     def has_delete_permission(self, request, obj=None):
         return False

@@ -356,9 +356,15 @@ class SiteSettingsForm(forms.ModelForm):
             'campaign_closed_message',
             'daily_bonus_enabled',
             'referrals_per_spin',
+            'max_wins_total',
+            'max_wins_per_day',
+            'unique_phone_required',
         ]
         widgets = {
             'subscription_required': forms.CheckboxInput(attrs={'class': 'form-check'}),
+            'unique_phone_required': forms.CheckboxInput(attrs={'class': 'form-check'}),
+            'max_wins_total': forms.NumberInput(attrs={'class': 'form-input', 'min': 0, 'max': 1000, 'step': 1}),
+            'max_wins_per_day': forms.NumberInput(attrs={'class': 'form-input', 'min': 0, 'max': 1000, 'step': 1}),
             'daily_bonus_enabled': forms.CheckboxInput(attrs={'class': 'form-check'}),
             'campaign_start': forms.DateTimeInput(
                 format=DATETIME_LOCAL_FORMAT, attrs={'class': 'form-input', 'type': 'datetime-local'}

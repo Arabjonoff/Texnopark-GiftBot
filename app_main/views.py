@@ -25,12 +25,16 @@ from app_main.services import (
     get_pending_winning,
     get_spinnable_prizes,
     referrals_per_spin,
+    spin_block_reason,
     start_spin,
     confirm_referral,
     confirmed_referrals,
     top_referrers,
+    normalize_phone,
+    phone_used_by_other,
     CampaignClosed,
     NoSpinsLeft,
+    SpinBlocked,
 )
 from app_main.subscription import subscription_status
 
@@ -56,6 +60,13 @@ def _saved_phone_digits(lead):
     if digits.startswith('998'):
         digits = digits[3:]
     return digits if len(digits) == 9 else ''
+
+
+def _spin_block(lead, pending, site):
+    if pending:
+        return None
+    reason = spin_block_reason(lead, site)
+    return {"code": reason[0], "message": reason[1]} if reason else None
 
 
 def _user_state(tg_id):
@@ -93,6 +104,8 @@ def _user_state(tg_id):
         "referral_friends": referral_friends,
         "referrals_per_spin": per_spin,
         "campaign": campaign_info(site),
+        # Limit yoki blok sababi — MiniApp tugma o'rniga shu matnni ko'rsatadi
+        "spin_block": _spin_block(lead, pending, site),
         "daily_bonus": {
             "enabled": site.daily_bonus_enabled,
             "available": daily_bonus_available(lead, site),
@@ -168,6 +181,11 @@ class SpinRouletteView(APIView):
 
         try:
             winning, created = start_spin(tg_id, user_data)
+        except SpinBlocked as e:
+            return Response(
+                {"error": e.message, "code": e.code, "available_spins": 0},
+                status=status.HTTP_403_FORBIDDEN
+            )
         except CampaignClosed:
             info = campaign_info()
             return Response(
@@ -207,6 +225,12 @@ class ClaimPrizeView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
+        phone = normalize_phone(data['phone_number'])
+        if not phone:
+            return Response(
+                {"error": "Telefon raqami noto'g'ri. +998 dan keyin 9 ta raqam kiriting.", "code": "phone_invalid"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         user_data = _authenticate(data['init_data'])
         if not user_data:
             return _invalid_init_data()
@@ -222,9 +246,26 @@ class ClaimPrizeView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            if lead.is_banned:
+                return Response(
+                    {"error": "Hisobingiz bloklangan. Texnopark xodimlariga murojaat qiling.", "code": "banned"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Bir odam bir nechta Telegram akkaunt ochib, bitta raqam bilan
+            # qayta-qayta sovg'a olmasligi uchun
+            if SiteSettings.load().unique_phone_required and phone_used_by_other(lead, phone):
+                return Response(
+                    {
+                        "error": "Bu telefon raqami boshqa akkauntda allaqachon ishlatilgan.",
+                        "code": "phone_taken",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             lead.first_name = data['first_name']
             lead.last_name = data.get('last_name', '')
-            lead.phone_number = data['phone_number']
+            lead.phone_number = phone
             lead.save(update_fields=['first_name', 'last_name', 'phone_number'])
 
             # Muddat rasmiylashtirilgan paytdan boshlab hisoblanadi
@@ -309,7 +350,7 @@ class PublicWinnersView(APIView):
 
         qs = (
             WinningResult.objects.select_related('lead', 'prize')
-            .exclude(status=WinningResult.Status.PENDING)
+            .exclude(status__in=[WinningResult.Status.PENDING, WinningResult.Status.CANCELLED])
             .order_by('-created_at')
         )
         total = qs.count()
@@ -364,6 +405,26 @@ class AdminVerifyCodeView(APIView):
             return Response(
                 {
                     "error": "Ushbu yutuqning amal qilish muddati tugagan!",
+                    "can_activate": False,
+                    "winning_result": WinningResultSerializer(winning).data
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if winning.status == WinningResult.Status.CANCELLED:
+            return Response(
+                {
+                    "error": "Bu yutuq bekor qilingan — sovg'a berilmaydi!",
+                    "can_activate": False,
+                    "winning_result": WinningResultSerializer(winning).data
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if winning.lead.is_banned:
+            return Response(
+                {
+                    "error": "Bu ishtirokchi bloklangan — sovg'a berilmaydi!",
                     "can_activate": False,
                     "winning_result": WinningResultSerializer(winning).data
                 },

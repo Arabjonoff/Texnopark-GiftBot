@@ -22,8 +22,10 @@ def _sync_expired_winnings():
 
 
 def _claimed_winnings():
-    """Rasmiylashtirilgan yutuqlar — PENDING (forma yuborilmagan) spinlarsiz."""
-    return WinningResult.objects.exclude(status=WinningResult.Status.PENDING)
+    """Rasmiylashtirilgan yutuqlar — PENDING (forma yuborilmagan) va bekor qilinganlarsiz."""
+    return WinningResult.objects.exclude(
+        status__in=[WinningResult.Status.PENDING, WinningResult.Status.CANCELLED]
+    )
 
 
 def get_dashboard_stats():
@@ -227,3 +229,113 @@ def get_staff_activity(limit=10):
         .filter(issued_total__gt=0)
         .order_by('-issued_total')[:limit]
     )
+
+
+# ---------------------------------------------------------------- Shubhali foydalanuvchilar
+
+def _shared_phone_groups():
+    """Oxirgi 9 raqami bir xil bo'lgan telefonlar: {raqam: [lead_id, ...]} (2+ akkaunt)."""
+    from app_main.services import phone_digits
+
+    groups = {}
+    for lead_id, phone in StudentLead.objects.exclude(phone_number='').values_list('id', 'phone_number'):
+        digits = phone_digits(phone)
+        if len(digits) == 9:
+            groups.setdefault(digits, []).append(lead_id)
+    return {digits: ids for digits, ids in groups.items() if len(ids) > 1}
+
+
+def get_suspicious_leads():
+    """
+    Ko'p yutuq olgan, bir telefonni boshqalar bilan bo'lishgan yoki
+    bloklangan foydalanuvchilar — firibgarlikni tekshirish uchun.
+    """
+    from app_main.models import SiteSettings, SpinGrant
+    from app_main.services import phone_digits
+
+    site = SiteSettings.load()
+    threshold = site.max_wins_total or 3
+    shared = _shared_phone_groups()
+    shared_ids = {lead_id for ids in shared.values() for lead_id in ids}
+
+    not_cancelled = ~Q(winnings__status=WinningResult.Status.CANCELLED)
+    leads = (
+        StudentLead.objects
+        .annotate(
+            win_count=Count('winnings', filter=not_cancelled, distinct=True),
+            active_count=Count(
+                'winnings',
+                filter=Q(winnings__status__in=[WinningResult.Status.ACTIVE, WinningResult.Status.PENDING]),
+                distinct=True,
+            ),
+            confirmed_refs=Count(
+                'referrals', filter=Q(referrals__referral_confirmed_at__isnull=False), distinct=True
+            ),
+        )
+        .filter(Q(win_count__gte=threshold) | Q(pk__in=shared_ids) | Q(is_banned=True))
+        .order_by('-win_count', '-extra_spins')
+    )
+
+    reason_labels = dict(SpinGrant.Reason.choices)
+    rows = []
+    for lead in leads:
+        grants = {}
+        for reason, amount in lead.spin_grants.values_list('reason', 'amount'):
+            grants[reason] = grants.get(reason, 0) + amount
+        # Qonuniy manbadan kelmagan spinlar — referal va kunlik bonusdan tashqari
+        unexplained = lead.extra_spins - grants.get('REFERRAL', 0) - grants.get('DAILY_BONUS', 0)
+
+        flags = []
+        if lead.win_count >= threshold:
+            flags.append("{0} ta yutuq".format(lead.win_count))
+        digits = phone_digits(lead.phone_number)
+        twins = [i for i in shared.get(digits, []) if i != lead.pk]
+        if twins:
+            flags.append("telefon {0} ta akkauntda".format(len(twins) + 1))
+        if unexplained > 0:
+            flags.append("{0} ta manbasiz spin".format(unexplained))
+
+        rows.append({
+            'lead': lead,
+            'flags': flags,
+            'grants': [(reason_labels.get(r, r), a) for r, a in grants.items() if a],
+            'twin_ids': twins,
+        })
+    return rows, threshold
+
+
+def reset_unused_spins(lead, staff_user):
+    """Ishlatilmagan qo'shimcha spinlarni olib tashlaydi (tarixga yoziladi)."""
+    from django.db import transaction
+    from app_main.models import SpinGrant
+    from app_main.services import grant_spins
+
+    with transaction.atomic():
+        lead = StudentLead.objects.select_for_update().get(pk=lead.pk)
+        # Hozirgacha aylantirilganlarga yetadigan darajada qoldiramiz — ortig'i olinadi
+        target = max(0, lead.winnings.count() - 1)
+        return -grant_spins(
+            lead, target - lead.extra_spins, SpinGrant.Reason.STAFF,
+            note="Ishlatilmagan spinlar olib tashlandi (shubhali faollik)", created_by=staff_user,
+        )
+
+
+def cancel_open_winnings(lead):
+    """
+    Olib ketilmagan (ACTIVE/PENDING) yutuqlarni bekor qiladi. Qoldiq kuzatiladigan
+    sovg'alar omborga qaytariladi — ular hech kimga berilmagan.
+    """
+    from django.db import transaction
+    from django.db.models import F
+
+    with transaction.atomic():
+        open_qs = lead.winnings.select_for_update().filter(
+            status__in=[WinningResult.Status.ACTIVE, WinningResult.Status.PENDING]
+        )
+        winnings = list(open_qs)
+        for w in winnings:
+            Prize.objects.filter(pk=w.prize_id, stock__isnull=False).update(stock=F('stock') + 1)
+        WinningResult.objects.filter(pk__in=[w.pk for w in winnings]).update(
+            status=WinningResult.Status.CANCELLED
+        )
+    return len(winnings)

@@ -1,0 +1,113 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Shubhalilar{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>Shubhali foydalanuvchilar</h2>
+    <p class="sub">{{ threshold }}+ yutuq olganlar, bir telefonni bo'lishgan akkauntlar va bloklanganlar</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'dashboard-settings' %}" class="btn">
+      <svg class="ic"><use href="#ic-sliders"/></svg> Limitlar
+    </a>
+  </div>
+</div>
+
+<div class="msg info" style="margin-bottom:1.1rem">
+  <svg class="ic"><use href="#ic-info"/></svg>
+  <span>
+    Hozirgi limit: jami <b>{% if site.max_wins_total %}{{ site.max_wins_total }}{% else %}cheklanmagan{% endif %}</b>,
+    kuniga <b>{% if site.max_wins_per_day %}{{ site.max_wins_per_day }}{% else %}cheklanmagan{% endif %}</b> ta yutuq.
+    «Manbasiz spin» — do'st taklifi yoki kunlik bonusdan kelmagan qo'shimcha spinlar.
+    Amallar orqaga qaytmaydi, ehtiyot bo'ling.
+  </span>
+</div>
+
+<div class="panel">
+  <div class="panel-title">
+    <span>Ro'yxat ({{ rows|length }})</span>
+  </div>
+
+  {% if rows %}
+    <div class="table-wrap">
+      <table class="table-cards">
+        <thead>
+          <tr>
+            <th scope="col">O'quvchi</th>
+            <th scope="col">Belgilar</th>
+            <th scope="col" style="text-align:right">Yutuq</th>
+            <th scope="col" style="text-align:right">Olinmagan</th>
+            <th scope="col">Qo'shimcha spinlar</th>
+            <th scope="col" style="text-align:right">Amallar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            {% with lead=row.lead %}
+            <tr>
+              <td data-label="O'quvchi">
+                <span class="td-strong">{{ lead.first_name }} {{ lead.last_name|default:'' }}</span>
+                {% if lead.is_banned %}<span class="badge EXPIRED" style="margin-left:.3rem">Bloklangan</span>{% endif %}
+                <div class="td-muted mono">{{ lead.telegram_id }} · {{ lead.phone_number|default:"—" }}</div>
+                {% if row.twin_ids %}
+                  <div class="td-muted">Shu raqamli boshqa akkaunt ID: {{ row.twin_ids|join:", " }}</div>
+                {% endif %}
+              </td>
+              <td data-label="Belgilar">
+                {% for flag in row.flags %}<span class="badge PENDING" style="margin:0 .25rem .25rem 0">{{ flag }}</span>{% endfor %}
+              </td>
+              <td data-label="Yutuq" style="text-align:right" class="td-strong">
+                <a href="{% url 'dashboard-winnings' %}?q={{ lead.telegram_id }}" style="text-decoration:underline">{{ lead.win_count }}</a>
+              </td>
+              <td data-label="Olinmagan" style="text-align:right">{{ lead.active_count }}</td>
+              <td data-label="Qo'shimcha spinlar">
+                <span class="td-strong">{{ lead.extra_spins }}</span>
+                <span class="td-muted">· do'st: {{ lead.confirmed_refs }}</span>
+                {% for label, amount in row.grants %}
+                  <div class="td-muted" style="font-size:.72rem">{{ label }}: {% if amount > 0 %}+{% endif %}{{ amount }}</div>
+                {% endfor %}
+              </td>
+              <td data-label="Amallar">
+                <div class="row-actions" style="justify-content:flex-end;flex-wrap:wrap">
+                  <form method="post" action="{% url 'dashboard-lead-reset-spins' lead.pk %}"
+                        onsubmit="return confirm('{{ lead.first_name|escapejs }}: ishlatilmagan spinlar olib tashlansinmi?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-sm" title="Ishlatilmagan spinlarni olib tashlash">Spinlarni 0</button>
+                  </form>
+                  {% if lead.active_count %}
+                    <form method="post" action="{% url 'dashboard-lead-cancel-winnings' lead.pk %}"
+                          onsubmit="return confirm('{{ lead.first_name|escapejs }}: {{ lead.active_count }} ta olib ketilmagan yutuq BEKOR qilinsinmi? Bu orqaga qaytmaydi.');">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" class="btn btn-sm btn-danger" title="Olib ketilmagan yutuqlarni bekor qilish">Yutuqlarni bekor qilish</button>
+                    </form>
+                  {% endif %}
+                  <form method="post" action="{% url 'dashboard-lead-ban' lead.pk %}"
+                        onsubmit="return confirm('{{ lead.first_name|escapejs }}: {% if lead.is_banned %}blokdan chiqarilsinmi{% else %}bloklansinmi{% endif %}?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-sm {% if not lead.is_banned %}btn-danger{% endif %}">
+                      <svg class="ic"><use href="#ic-ban"/></svg> {% if lead.is_banned %}Blokdan chiqarish{% else %}Bloklash{% endif %}
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endwith %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      <span class="icon"><svg class="ic"><use href="#ic-shield"/></svg></span>
+      Shubhali foydalanuvchi topilmadi.
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -6,7 +6,7 @@ Ushbu fayl loyihaning yaratilishidan boshlab hozirgacha bajarilgan barcha ishlar
 
 ## 📌 Hozirgi Holat (Current Project Status)
 
-**Versiya:** `v1.3.0`  
+**Versiya:** `v1.3.1`  
 **Server IP:** `5.104.108.235`  
 **Domen:** `gift.yoshlar-texnoparki.uz`  
 **Telegram Bot:** `@texnogiftbot`  
@@ -52,6 +52,25 @@ Ushbu fayl loyihaning yaratilishidan boshlab hozirgacha bajarilgan barcha ishlar
 ---
 
 ## 📝 Kelgusidagi O'zgarishlar va Yangilanishlar Jurnali (Change Log)
+
+### 2026-09-23 - Versiya: v1.3.1
+- **Turi:** Firibgarlikka qarshi himoya
+- **Sabab:** ayrim foydalanuvchilarda do'st taklifisiz 3–9 ta "manbasi noma'lum" qo'shimcha spin
+  topildi (biri 10 ta sovg'a olgan), bitta telefon raqami ikki akkauntda ishlatilgan.
+- **Tavsif:**
+  1. **Yutuq limiti** — bir odamga jami (standart 3) va kunlik (standart 1) yutuq. Qo'shimcha
+     spinlar qancha bo'lmasin, server limitdan ortiq bermaydi. Sozlamalardan o'zgartiriladi (0 — cheklanmagan).
+  2. **Bitta telefon = bitta ishtirokchi** — raqam boshqa akkauntda yutuq olgan bo'lsa, rasmiylashtirilmaydi.
+     Telefon endi yagona formatda (`+998XXXXXXXXX`) saqlanadi, noto'g'ri raqam qabul qilinmaydi.
+  3. **Spinlar tarixi** (`SpinGrant`) — har bir qo'shimcha spin sababi bilan yoziladi (referal, kunlik
+     bonus, xodim). Mavjud spinlar "v1.3.1 gacha, manbasi noma'lum" deb qayd etildi.
+     Django admin'da `extra_spins` endi qo'lda tahrirlanmaydi.
+  4. **Dashboard → Shubhalilar** — ko'p yutuqli, telefoni takrorlangan va bloklangan foydalanuvchilar;
+     «Spinlarni 0», «Yutuqlarni bekor qilish» (qoldiq omborga qaytadi), «Bloklash».
+     Yangi holat `CANCELLED`; bloklangan yoki bekor qilingan yutuq QR skanerda rad etiladi.
+- **Migratsiya:** `0012`.
+
+---
 
 ### 2026-09-23 - Versiya: v1.3.0
 - **Turi:** Majburiy obuna, bot xabarlari, aksiya muddati, sovg'a qoldig'i va xavfsizlik
