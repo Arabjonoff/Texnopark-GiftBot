@@ -774,3 +774,32 @@ class DashboardSettingsTests(TestCase):
         self.assertEqual(resp.context['staff_activity'][0].issued_total, 1)
         self.assertEqual(resp.context['stats']['total_leads'], 1)
         self.assertEqual(resp.context['stats']['total_users'], 2)
+
+
+@override_settings(TELEGRAM_BOT_TOKEN='555:SECRET-TOKEN')
+class TokenRedactionTests(TestCase):
+    """Bot tokeni loglarga va dashboardga chiqmasligi kerak."""
+
+    def test_network_error_message_hides_token(self):
+        import requests
+        from app_main.subscription import ChannelCheckError, _api_get_chat_member
+        error = requests.ConnectionError(
+            "Max retries exceeded with url: /bot555:SECRET-TOKEN/getChatMember?chat_id=@k"
+        )
+        with mock.patch('app_main.subscription.requests.get', side_effect=error):
+            with self.assertRaises(ChannelCheckError) as ctx:
+                _api_get_chat_member('@k', 1)
+        self.assertNotIn('SECRET-TOKEN', str(ctx.exception))
+        self.assertIn('<TOKEN>', str(ctx.exception))
+        self.assertIsNone(ctx.exception.__cause__)
+
+    def test_log_filter_hides_token(self):
+        import logging
+        from bot.bot_instance import RedactTokenFilter
+        record = logging.LogRecord(
+            'httpx', logging.INFO, __file__, 1,
+            'HTTP Request: POST %s "200 OK"', ('https://api.telegram.org/bot555:SECRET-TOKEN/getMe',), None,
+        )
+        RedactTokenFilter('555:SECRET-TOKEN').filter(record)
+        self.assertNotIn('SECRET-TOKEN', record.getMessage())
+        self.assertEqual(logging.getLogger('httpx').level, logging.WARNING)

@@ -46,7 +46,10 @@ def _api_get_chat_member(chat_id, user_id):
         )
         data = resp.json()
     except (requests.RequestException, ValueError) as exc:
-        raise ChannelCheckError(f"Telegram API bilan aloqa yo'q: {exc}") from exc
+        # requests xato matnida so'rov URL'i (demak token ham) bo'lishi mumkin —
+        # u logga va dashboardga chiqmasligi kerak
+        detail = str(exc).replace(token, '<TOKEN>')
+        raise ChannelCheckError(f"Telegram API bilan aloqa yo'q: {detail}") from None
 
     if data.get('ok'):
         return data['result']
