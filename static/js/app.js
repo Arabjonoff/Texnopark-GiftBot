@@ -9,6 +9,9 @@
  * Spin oqimi: /api/spin/ sovg'ani serverda aniqlaydi va darhol PENDING
  * yutuq sifatida saqlaydi -> g'alaba oynasi -> forma -> /api/claim-prize/.
  * Forma yuborilmasa, keyingi ochilishda o'sha sovg'a qayta taklif qilinadi.
+ *
+ * Yangi spin uchun shartlar (server ham tekshiradi): aksiya davom etayotgan
+ * bo'lishi va foydalanuvchi majburiy kanallarga obuna bo'lgan bo'lishi kerak.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -73,13 +76,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const phoneError = $('phone-error');
   const btnSubmitLead = $('btn-submit-lead');
 
+  const campaignBanner = $('campaign-banner');
+  const campaignMessage = $('campaign-message');
+  const subscribeGate = $('subscribe-gate');
+  const subscribeChannels = $('subscribe-channels');
+  const dailyBonusCard = $('daily-bonus-card');
+  const btnDailyBonus = $('btn-daily-bonus');
+
   const referralCard = $('referral-card');
+  const referralTitle = $('referral-title');
   const referralHint = $('referral-hint');
   const friendSlots = $('friend-slots');
   const refLinkInput = $('ref-link-input');
   const btnCopyRef = $('btn-copy-ref');
   const btnShareTg = $('btn-share-tg');
   const invitedCountBadge = $('invited-count-badge');
+  const pendingInvites = $('pending-invites');
+  const pendingInvitesCount = $('pending-invites-count');
 
   const historyList = $('history-list');
   const historyEmpty = $('history-empty');
@@ -94,6 +107,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const winnersTotalCount = $('winners-total-count');
   const btnLoadMoreWinners = $('btn-load-more-winners');
   const btnRetryWinners = $('btn-retry-winners');
+  const winnersSubtitle = $('winners-subtitle');
+  const boardWinners = $('board-winners');
+  const boardReferrers = $('board-referrers');
+  const referrersList = $('referrers-list');
+  const referrersLoading = $('referrers-loading');
+  const referrersEmpty = $('referrers-empty');
 
   const qrViewModal = $('qr-view-modal');
   const qrModalTitle = $('qr-modal-title');
@@ -117,6 +136,12 @@ document.addEventListener('DOMContentLoaded', () => {
   let lastFriendCount = null;
   let spinsThisSession = 0;
   let submittingLead = false;
+
+  // Server tekshiradigan shartlar — UI shunga qarab tugma holatini tanlaydi
+  let subscription = { ok: true, channels: [] };
+  let campaign = { state: 'active', message: '' };
+  let dailyBonus = { enabled: false, available: false };
+  let checkingSubscription = false;
 
   const WINNERS_PAGE_SIZE = 30;
   let winnersOffset = 0;
@@ -326,8 +351,14 @@ document.addEventListener('DOMContentLoaded', () => {
     userReferralLink = data.referral_link || userReferralLink || 'https://t.me/texnogiftbot';
     currentWonPrize = data.pending_prize || null;
     savedProfile = data.saved_profile || savedProfile;
+    if (data.subscription) subscription = data.subscription;
+    if (data.campaign) campaign = data.campaign;
+    if (data.daily_bonus) dailyBonus = data.daily_bonus;
 
     if (spinsCountBadge) spinsCountBadge.innerText = userAvailableSpins;
+    renderCampaign();
+    renderSubscription();
+    renderDailyBonus();
     updateSpinButton();
     updateReferralHub(data);
     renderHistory(data.winnings || []);
@@ -377,6 +408,8 @@ document.addEventListener('DOMContentLoaded', () => {
     show(outsideTelegram);
     hide(spinBtn);
     hide(referralCard);
+    hide(subscribeGate);
+    hide(dailyBonusCard);
     if (spinsCountBadge) spinsCountBadge.innerText = '–';
     renderHistory([]);
   }
@@ -412,6 +445,9 @@ document.addEventListener('DOMContentLoaded', () => {
     spin: { text: "Sovg'ani ochish", icon: 'gift', pulse: true },
     claim: { text: 'Yutuqni rasmiylashtirish', icon: 'check', pulse: true },
     invite: { text: "Do'stlarni taklif qilish", icon: 'users', secondary: true },
+    subscribe: { text: 'Obunani tekshirish', icon: 'refresh', pulse: true },
+    checking: { text: 'Tekshirilmoqda…', icon: 'refresh', disabled: true },
+    closed: { text: 'Aksiya yopiq', icon: 'lock', disabled: true, secondary: true },
     retry: { text: 'Qayta urinish', icon: 'refresh' },
   };
 
@@ -432,7 +468,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateSpinButton() {
     if (rouletteEngine.isSpinning) return;
+    // Tushgan sovg'ani rasmiylashtirish har doim mumkin — aksiya tugagan bo'lsa ham
     if (currentWonPrize) setSpinButton('claim');
+    else if (campaign.state !== 'active') setSpinButton('closed');
+    else if (!subscription.ok) setSpinButton(checkingSubscription ? 'checking' : 'subscribe');
     else if (userAvailableSpins > 0) setSpinButton('spin');
     else setSpinButton('invite');
   }
@@ -442,6 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'spin': return startSpin();
       case 'claim': return openVictoryModal(currentWonPrize, { resumed: true });
       case 'invite': return shareReferral();
+      case 'subscribe': return checkSubscription();
       case 'retry':
         setSpinButton('loading');
         return init();
@@ -470,6 +510,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!resp.ok) {
         if (resp.status === 400 && data.available_spins === 0) userAvailableSpins = 0;
+        if (data.code === 'not_subscribed' && data.subscription) {
+          subscription = data.subscription;
+          renderSubscription();
+        }
+        if (data.code === 'campaign_closed' && data.campaign) {
+          campaign = data.campaign;
+          renderCampaign();
+          renderSubscription();
+        }
         toast(data.error || 'Xatolik yuz berdi');
         updateSpinButton();
         return;
@@ -926,8 +975,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const invited = data.invited_count || 0;
     const friends = Array.isArray(data.referral_friends) ? data.referral_friends : [];
 
+    const pending = data.pending_invites || 0;
+
     refLinkInput.value = userReferralLink;
     invitedCountBadge.innerText = invited;
+    pendingInvitesCount.innerText = pending;
+    pending > 0 ? show(pendingInvites) : hide(pendingInvites);
+    referralTitle.textContent = `${perSpin} do'st = +1 imkoniyat`;
+    friendSlots.style.gridTemplateColumns = `repeat(${Math.min(perSpin, 5)}, 1fr)`;
 
     // Yangi qo'shilgan do'st joyi "sakrab" to'ladi
     const newlyAdded = lastFriendCount !== null && invited > lastFriendCount;
@@ -950,12 +1005,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const remaining = perSpin - friends.length;
     referralHint.textContent = friends.length === 0
-      ? `Havolangiz orqali ${perSpin} ta do'stingiz qo'shilsa, sovg'ani yana bir marta ochasiz`
+      ? `Havolangiz orqali ${perSpin} ta do'stingiz yutug'ini olsa, sovg'ani yana bir marta ochasiz`
       : `Zo'r! Yana ${remaining} ta do'st — va sovg'ani yana bir marta ochasiz`;
 
     if (newlyAdded) {
       haptic.notify('success');
-      toast("Do'stingiz qo'shildi!", 'success', 2400);
+      toast("Do'stingiz hisobga qo'shildi!", 'success', 2400);
     }
   }
 
@@ -984,6 +1039,186 @@ document.addEventListener('DOMContentLoaded', () => {
     haptic.notify('success');
     toast('Havola nusxalandi', 'success', 2000);
   });
+
+  // ---------------------------------------------------------------- Aksiya muddati
+
+  function renderCampaign() {
+    if (campaign.state === 'active' || !campaign.message) {
+      hide(campaignBanner);
+      return;
+    }
+    campaignMessage.textContent = campaign.message;
+    show(campaignBanner);
+  }
+
+  // ---------------------------------------------------------------- Majburiy obuna
+
+  function openChannel(link) {
+    if (!link) return;
+    haptic.impact('light');
+    if (tg && tg.openTelegramLink && link.startsWith('https://t.me/')) tg.openTelegramLink(link);
+    else if (tg && tg.openLink) tg.openLink(link);
+    else window.open(link, '_blank');
+  }
+
+  function renderSubscription() {
+    // Sovg'a kutib turgan yoki aksiya yopiq bo'lsa, obuna so'rashning ma'nosi yo'q
+    const needed = !subscription.ok && !currentWonPrize && campaign.state === 'active' && !!initDataRaw;
+    if (!needed) {
+      hide(subscribeGate);
+      return;
+    }
+
+    subscribeChannels.innerHTML = '';
+    (subscription.channels || []).forEach((ch) => {
+      const row = document.createElement('div');
+      row.className = 'channel-row' + (ch.subscribed ? ' is-joined' : '');
+
+      const title = document.createElement('span');
+      title.className = 'channel-title';
+      title.textContent = ch.title;
+      row.appendChild(title);
+
+      if (ch.subscribed) {
+        const ok = document.createElement('span');
+        ok.className = 'channel-status';
+        ok.innerHTML = icon('check');
+        ok.setAttribute('aria-label', "Obuna bo'lingan");
+        row.appendChild(ok);
+      } else {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-telegram';
+        btn.innerHTML = `${icon('external')}<span>Obuna bo'lish</span>`;
+        btn.disabled = !ch.link;
+        btn.addEventListener('click', () => openChannel(ch.link));
+        row.appendChild(btn);
+      }
+      subscribeChannels.appendChild(row);
+    });
+    show(subscribeGate);
+  }
+
+  async function checkSubscription() {
+    if (checkingSubscription) return;
+    checkingSubscription = true;
+    updateSpinButton();
+
+    try {
+      const resp = await fetch('/api/check-subscription/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ init_data: initDataRaw })
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      subscription = await resp.json();
+
+      if (subscription.ok) {
+        haptic.notify('success');
+        toast("Rahmat! Endi barabanni aylantirishingiz mumkin", 'success');
+      } else {
+        toast("Hali barcha kanallarga obuna bo'lmagansiz");
+      }
+    } catch (err) {
+      console.error('Subscription check error:', err);
+      toast("Obunani tekshirib bo'lmadi. Qayta urinib ko'ring.");
+    } finally {
+      checkingSubscription = false;
+      renderSubscription();
+      updateSpinButton();
+    }
+  }
+
+  // ---------------------------------------------------------------- Kunlik bonus
+
+  function renderDailyBonus() {
+    dailyBonus.enabled && dailyBonus.available && initDataRaw ? show(dailyBonusCard) : hide(dailyBonusCard);
+  }
+
+  btnDailyBonus.addEventListener('click', async () => {
+    btnDailyBonus.disabled = true;
+    try {
+      const resp = await fetch('/api/daily-bonus/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ init_data: initDataRaw })
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        toast(data.error || 'Xatolik yuz berdi');
+        dailyBonus.available = false;
+        renderDailyBonus();
+        return;
+      }
+      haptic.notify('success');
+      toast(data.message || "+1 aylantirish qo'shildi!", 'success');
+      applyUserState(data);
+    } catch (err) {
+      console.error('Daily bonus error:', err);
+      toast("Server bilan bog'lanishda xatolik");
+    } finally {
+      btnDailyBonus.disabled = false;
+    }
+  });
+
+  // ---------------------------------------------------------------- Top taklifchilar
+
+  const boardButtons = document.querySelectorAll('.segmented-item');
+  const BOARD_SUBTITLES = {
+    winners: "Shu botda sovg'a yutib olgan ishtirokchilar",
+    referrers: "Eng ko'p do'st taklif qilgan ishtirokchilar",
+  };
+
+  function switchBoard(name) {
+    boardButtons.forEach((btn) => {
+      const isActive = btn.dataset.board === name;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    name === 'winners' ? show(boardWinners) : hide(boardWinners);
+    name === 'referrers' ? show(boardReferrers) : hide(boardReferrers);
+    winnersSubtitle.textContent = BOARD_SUBTITLES[name];
+    if (name === 'referrers') loadReferrers();
+  }
+
+  boardButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!btn.classList.contains('active')) haptic.select();
+      switchBoard(btn.dataset.board);
+    });
+  });
+
+  async function loadReferrers() {
+    if (!referrersList.children.length) show(referrersLoading);
+    hide(referrersEmpty);
+    try {
+      const resp = await fetch('/api/top-referrers/');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      const rows = data.referrers || [];
+
+      referrersList.innerHTML = '';
+      rows.forEach((r) => {
+        const row = document.createElement('div');
+        row.className = 'winner-row';
+        const medal = r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : r.rank;
+        row.innerHTML = `
+          <div class="winner-rank">${escapeHTML(medal)}</div>
+          <div class="winner-body">
+            <div class="winner-name">${escapeHTML(r.display_name)}</div>
+          </div>
+          <div class="referrer-count">${escapeHTML(r.invited)} do'st</div>
+        `;
+        referrersList.appendChild(row);
+      });
+      rows.length ? hide(referrersEmpty) : show(referrersEmpty);
+    } catch (err) {
+      console.error('Referrers load error:', err);
+      toast("Reytingni yuklab bo'lmadi");
+    } finally {
+      hide(referrersLoading);
+    }
+  }
 
   // ---------------------------------------------------------------- Start
 

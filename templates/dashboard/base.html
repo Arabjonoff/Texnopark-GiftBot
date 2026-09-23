@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260923b">
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260923c">
   {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -59,9 +59,17 @@
       </a>
 
       <div class="nav-label">Amallar</div>
+      <a href="{% url 'dashboard-broadcasts' %}" class="nav-item {% if active_page == 'broadcasts' %}active{% endif %}"
+         {% if active_page == 'broadcasts' %}aria-current="page"{% endif %}>
+        <svg class="ic"><use href="#ic-send"/></svg> Xabarlar
+      </a>
       <a href="{% url 'dashboard-scan' %}" class="nav-item {% if active_page == 'scan' %}active{% endif %}"
          {% if active_page == 'scan' %}aria-current="page"{% endif %}>
         <svg class="ic"><use href="#ic-scan"/></svg> QR Skaner
+      </a>
+      <a href="{% url 'dashboard-settings' %}" class="nav-item {% if active_page == 'settings' %}active{% endif %}"
+         {% if active_page == 'settings' %}aria-current="page"{% endif %}>
+        <svg class="ic"><use href="#ic-sliders"/></svg> Sozlamalar
       </a>
       <a href="/admin/" class="nav-item" target="_blank" rel="noopener">
         <svg class="ic"><use href="#ic-settings"/></svg> Django Admin

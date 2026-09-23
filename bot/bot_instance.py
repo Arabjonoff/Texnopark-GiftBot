@@ -1,7 +1,7 @@
 import logging
 from django.conf import settings
 from telegram.ext import Application
-from bot.handlers import post_init, setup_handlers
+from bot.handlers import post_init, post_shutdown, setup_handlers
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -14,6 +14,11 @@ def create_bot_application():
     if not token or token.endswith('_TEXNOPARK_TEST'):
         logger.warning("Telegram bot tokeni to'liq sozlanmagan. Standart sozlama faol.")
 
-    application = Application.builder().token(token).post_init(post_init).build()
+    application = (
+        Application.builder().token(token)
+        .post_init(post_init)
+        .post_shutdown(post_shutdown)
+        .build()
+    )
     setup_handlers(application)
     return application

@@ -1,7 +1,9 @@
 import csv
 from django.contrib import admin
 from django.http import HttpResponse
-from app_main.models import Prize, PrizeCategory, StudentLead, WinningResult
+from app_main.models import (
+    BotMessage, Broadcast, Prize, PrizeCategory, RequiredChannel, SiteSettings, StudentLead, WinningResult,
+)
 
 def export_as_csv(modeladmin, request, queryset):
     """Generic CSV export admin action"""
@@ -41,7 +43,7 @@ class PrizeAdmin(admin.ModelAdmin):
 
 @admin.register(StudentLead)
 class StudentLeadAdmin(admin.ModelAdmin):
-    list_display = ('id', 'telegram_id', 'first_name', 'last_name', 'phone_number', 'created_at')
+    list_display = ('id', 'telegram_id', 'first_name', 'last_name', 'phone_number', 'bot_blocked', 'created_at')
     list_filter = ('created_at',)
     search_fields = ('first_name', 'last_name', 'phone_number', 'telegram_id')
     actions = [export_as_csv]
@@ -61,3 +63,37 @@ class WinningResultAdmin(admin.ModelAdmin):
     def get_prize_title(self, obj):
         return f"{obj.prize.title} [{obj.prize.rarity}]"
     get_prize_title.short_description = "Sovg'a"
+
+
+@admin.register(Broadcast)
+class BroadcastAdmin(admin.ModelAdmin):
+    list_display = ('id', 'audience', 'status', 'total', 'sent_count', 'failed_count', 'created_by', 'created_at')
+    list_filter = ('status', 'audience')
+    search_fields = ('text',)
+    readonly_fields = ('total', 'sent_count', 'failed_count', 'created_by', 'created_at', 'finished_at')
+
+
+@admin.register(BotMessage)
+class BotMessageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'kind', 'chat_id', 'status', 'attempts', 'error', 'created_at', 'sent_at')
+    list_filter = ('kind', 'status')
+    search_fields = ('chat_id', 'text')
+
+
+@admin.register(RequiredChannel)
+class RequiredChannelAdmin(admin.ModelAdmin):
+    list_display = ('id', 'title', 'chat_id', 'invite_link', 'sort_order', 'is_active')
+    list_editable = ('sort_order', 'is_active')
+
+
+@admin.register(SiteSettings)
+class SiteSettingsAdmin(admin.ModelAdmin):
+    list_display = ('__str__', 'subscription_required', 'campaign_start', 'campaign_end',
+                    'daily_bonus_enabled', 'referrals_per_spin', 'updated_at')
+
+    def has_add_permission(self, request):
+        # Yagona qator — SiteSettings.load() yaratadi
+        return not SiteSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False

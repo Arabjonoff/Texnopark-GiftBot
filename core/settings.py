@@ -146,3 +146,8 @@ X_FRAME_OPTIONS = 'SAMEORIGIN'
 # Telegram Bot Token & WebApp URL
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_WEBAPP_URL = os.getenv('TELEGRAM_WEBAPP_URL', 'http://127.0.0.1:8000')
+TELEGRAM_BOT_USERNAME = os.getenv('TELEGRAM_BOT_USERNAME', 'texnogiftbot').lstrip('@')
+
+# Telegram initData necha soniyagacha amal qiladi. Undan eski imzolar
+# rad etiladi (0 — tekshirilmaydi). MiniApp har ochilganda yangi initData oladi.
+INIT_DATA_MAX_AGE_SECONDS = int(os.getenv('INIT_DATA_MAX_AGE_SECONDS', str(24 * 60 * 60)))

@@ -6,7 +6,10 @@ from app_main.views import (
     ClaimPrizeView,
     MyPrizeView,
     PublicWinnersView,
-    AdminVerifyCodeView
+    AdminVerifyCodeView,
+    CheckSubscriptionView,
+    DailyBonusView,
+    TopReferrersView,
 )
 
 urlpatterns = [
@@ -16,5 +19,8 @@ urlpatterns = [
     path('claim-prize/', ClaimPrizeView.as_view(), name='api-claim-prize'),
     path('my-prize/', MyPrizeView.as_view(), name='api-my-prize'),
     path('winners/', PublicWinnersView.as_view(), name='api-winners'),
+    path('top-referrers/', TopReferrersView.as_view(), name='api-top-referrers'),
+    path('check-subscription/', CheckSubscriptionView.as_view(), name='api-check-subscription'),
+    path('daily-bonus/', DailyBonusView.as_view(), name='api-daily-bonus'),
     path('admin/verify-code/', AdminVerifyCodeView.as_view(), name='api-admin-verify-code'),
 ]

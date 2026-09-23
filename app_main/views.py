@@ -2,11 +2,12 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 
-from app_main.models import StudentLead, WinningResult
+from app_main.models import SiteSettings, StudentLead, WinningResult
 from app_main.serializers import (
     PrizeSerializer,
     WinningResultSerializer,
@@ -14,17 +15,25 @@ from app_main.serializers import (
     VerifyCodeSerializer,
     PublicWinnerSerializer
 )
+from app_main.messaging import notify_referral_confirmed
 from app_main.services import (
     verify_telegram_init_data,
+    campaign_info,
     check_user_spin_status,
+    claim_daily_bonus,
+    daily_bonus_available,
     get_pending_winning,
     get_spinnable_prizes,
+    referrals_per_spin,
     start_spin,
+    confirm_referral,
+    confirmed_referrals,
+    top_referrers,
+    CampaignClosed,
     NoSpinsLeft,
-    REFERRALS_PER_SPIN,
 )
+from app_main.subscription import subscription_status
 
-BOT_USERNAME = "texnogiftbot"
 
 def _invalid_init_data():
     return Response(
@@ -56,24 +65,38 @@ def _user_state(tg_id):
     """
     available_spins, lead, winnings = check_user_spin_status(tg_id)
     pending = get_pending_winning(lead)
+    site = SiteSettings.load()
+    per_spin = referrals_per_spin()
 
     invited_count = 0
+    pending_invites = 0
     referral_friends = []
     if lead:
-        referrals = list(lead.referrals.order_by('created_at').values_list('first_name', flat=True))
+        referrals = list(
+            confirmed_referrals(lead).order_by('referral_confirmed_at')
+            .values_list('first_name', flat=True)
+        )
         invited_count = len(referrals)
+        # Havola orqali kirgan, lekin hali yutug'ini rasmiylashtirmagan do'stlar
+        pending_invites = lead.referrals.filter(referral_confirmed_at__isnull=True).count()
         # Joriy "3 talik" tsikldagi do'stlar — referal kartasidagi avatarlar uchun
-        in_cycle = invited_count % REFERRALS_PER_SPIN
+        in_cycle = invited_count % per_spin
         referral_friends = referrals[invited_count - in_cycle:] if in_cycle else []
 
     return {
         "available_spins": available_spins,
         "winnings": WinningResultSerializer(winnings, many=True).data,
         "pending_prize": PrizeSerializer(pending.prize).data if pending else None,
-        "referral_link": f"https://t.me/{BOT_USERNAME}?start=ref_{tg_id}",
+        "referral_link": f"https://t.me/{settings.TELEGRAM_BOT_USERNAME}?start=ref_{tg_id}",
         "invited_count": invited_count,
+        "pending_invites": pending_invites,
         "referral_friends": referral_friends,
-        "referrals_per_spin": REFERRALS_PER_SPIN,
+        "referrals_per_spin": per_spin,
+        "campaign": campaign_info(site),
+        "daily_bonus": {
+            "enabled": site.daily_bonus_enabled,
+            "available": daily_bonus_available(lead, site),
+        },
         "saved_profile": {
             "first_name": lead.first_name if lead and lead.phone_number else '',
             "last_name": (lead.last_name or '') if lead and lead.phone_number else '',
@@ -93,8 +116,19 @@ class ValidateInitDataView(APIView):
             "valid": True,
             "telegram_id": tg_id,
             "user_info": user_data,
+            "subscription": subscription_status(tg_id),
             **_user_state(tg_id),
         }, status=status.HTTP_200_OK)
+
+
+class CheckSubscriptionView(APIView):
+    """«Obunani tekshirish» tugmasi — kanalga qo'shilgandan keyin bosiladi."""
+
+    def post(self, request):
+        user_data = _authenticate(request.data.get('init_data'))
+        if not user_data:
+            return _invalid_init_data()
+        return Response(subscription_status(user_data['id']), status=status.HTTP_200_OK)
 
 
 class PrizeListView(APIView):
@@ -115,8 +149,31 @@ class SpinRouletteView(APIView):
         if not user_data:
             return _invalid_init_data()
 
+        tg_id = user_data['id']
+
+        # Rasmiylashtirilmagan sovg'a bo'lsa, u baribir qaytariladi — obuna
+        # faqat yangi aylantirish uchun talab qilinadi
+        lead = StudentLead.objects.filter(telegram_id=tg_id).first()
+        if not get_pending_winning(lead):
+            subscription = subscription_status(tg_id)
+            if not subscription['ok']:
+                return Response(
+                    {
+                        "error": "Barabanni aylantirish uchun kanallarga obuna bo'ling.",
+                        "code": "not_subscribed",
+                        "subscription": subscription,
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
         try:
-            winning, created = start_spin(user_data['id'], user_data)
+            winning, created = start_spin(tg_id, user_data)
+        except CampaignClosed:
+            info = campaign_info()
+            return Response(
+                {"error": info['message'], "code": "campaign_closed", "campaign": info},
+                status=status.HTTP_403_FORBIDDEN
+            )
         except NoSpinsLeft:
             return Response(
                 {
@@ -175,6 +232,11 @@ class ClaimPrizeView(APIView):
             winning.expires_at = timezone.now() + timedelta(days=winning.prize.valid_days)
             winning.save(update_fields=['status', 'expires_at'])
 
+            # Do'st haqiqiy ishtirokchi bo'ldi — taklif qiluvchiga hisoblanadi
+            referrer, spin_awarded = confirm_referral(lead)
+            if referrer:
+                notify_referral_confirmed(referrer, lead, spin_awarded, referrals_per_spin())
+
         return Response({
             "message": "Muvaffaqiyatli saqlandi va yutuq biriktirildi!",
             "winning_result": WinningResultSerializer(winning).data,
@@ -193,6 +255,32 @@ class MyPrizeView(APIView):
             return _invalid_init_data()
 
         return Response(_user_state(user_data['id']), status=status.HTTP_200_OK)
+
+
+class DailyBonusView(APIView):
+    """Kunlik +1 aylantirish (dashboardda yoqilgan bo'lsa)."""
+
+    def post(self, request):
+        user_data = _authenticate(request.data.get('init_data'))
+        if not user_data:
+            return _invalid_init_data()
+
+        if not claim_daily_bonus(user_data['id'], user_data):
+            return Response(
+                {"error": "Bugungi bonus allaqachon olingan. Ertaga qaytib keling!"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        return Response({
+            "message": "+1 aylantirish qo'shildi!",
+            **_user_state(user_data['id']),
+        }, status=status.HTTP_200_OK)
+
+
+class TopReferrersView(APIView):
+    """Eng ko'p do'st taklif qilganlar — ochiq ro'yxat, ismlar qisqartirilgan."""
+
+    def get(self, request):
+        return Response({"referrers": top_referrers(10)}, status=status.HTTP_200_OK)
 
 
 class PublicWinnersView(APIView):
@@ -304,9 +392,7 @@ class AdminVerifyCodeView(APIView):
             }, status=status.HTTP_200_OK)
 
         # 2-bosqich: sovg'ani berish
-        winning.status = WinningResult.Status.USED
-        winning.used_at = timezone.now()
-        winning.save(update_fields=['status', 'used_at'])
+        winning.mark_used(request.user)
 
         return Response({
             "success": True,

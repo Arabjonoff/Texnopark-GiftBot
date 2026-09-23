@@ -624,3 +624,30 @@ select.form-input option { background: var(--bg-panel); color: var(--text); }
   body { background: #fff; color: #000; }
   .panel, .stat-card { border-color: #ccc; background: #fff; }
 }
+
+/* ============================== Tanlov ro'yxati (radio kartalar) ============================== */
+
+.choice-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-input);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.choice:hover { border-color: var(--border-strong); }
+.choice input { accent-color: var(--accent); width: 16px; height: 16px; flex-shrink: 0; }
+.choice:has(input:checked) { border-color: var(--accent); background: rgba(99, 102, 241, 0.1); }
+.choice-label { flex: 1; font-size: 0.86rem; }
+.choice-count {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+}

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from app_main.models import Prize, PrizeCategory, StudentLead, WinningResult
+from app_main.services import mask_name
 
 class PrizeCategorySerializer(serializers.ModelSerializer):
     display_image = serializers.ReadOnlyField()
@@ -106,8 +107,4 @@ class PublicWinnerSerializer(serializers.ModelSerializer):
         ]
 
     def get_display_name(self, obj):
-        first = (obj.lead.first_name or '').strip()
-        last = (obj.lead.last_name or '').strip()
-        if last:
-            return f"{first} {last[0].upper()}."
-        return first or "Ishtirokchi"
+        return mask_name(obj.lead.first_name, obj.lead.last_name)

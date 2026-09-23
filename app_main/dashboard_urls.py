@@ -33,6 +33,17 @@ urlpatterns = [
     path('winnings/export/', views.winning_export, name='dashboard-winnings-export'),
     path('winnings/<int:pk>/activate/', views.winning_activate, name='dashboard-winning-activate'),
 
+    # Ommaviy xabarlar
+    path('broadcasts/', views.broadcast_list, name='dashboard-broadcasts'),
+    path('broadcasts/new/', views.broadcast_create, name='dashboard-broadcast-create'),
+    path('broadcasts/<int:pk>/cancel/', views.broadcast_cancel, name='dashboard-broadcast-cancel'),
+
+    # Sozlamalar va majburiy kanallar
+    path('settings/', views.settings_view, name='dashboard-settings'),
+    path('settings/channels/new/', views.channel_create, name='dashboard-channel-create'),
+    path('settings/channels/<int:pk>/toggle/', views.channel_toggle, name='dashboard-channel-toggle'),
+    path('settings/channels/<int:pk>/delete/', views.channel_delete, name='dashboard-channel-delete'),
+
     # Hisob
     path('account/password/', views.account_password, name='dashboard-account-password'),
 

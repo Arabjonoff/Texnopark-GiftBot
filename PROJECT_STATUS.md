@@ -6,7 +6,7 @@ Ushbu fayl loyihaning yaratilishidan boshlab hozirgacha bajarilgan barcha ishlar
 
 ## 📌 Hozirgi Holat (Current Project Status)
 
-**Versiya:** `v1.2.1-production`  
+**Versiya:** `v1.3.0`  
 **Server IP:** `5.104.108.235`  
 **Domen:** `gift.yoshlar-texnoparki.uz`  
 **Telegram Bot:** `@texnogiftbot`  
@@ -52,6 +52,38 @@ Ushbu fayl loyihaning yaratilishidan boshlab hozirgacha bajarilgan barcha ishlar
 ---
 
 ## 📝 Kelgusidagi O'zgarishlar va Yangilanishlar Jurnali (Change Log)
+
+### 2026-09-23 - Versiya: v1.3.0
+- **Turi:** Majburiy obuna, bot xabarlari, aksiya muddati, sovg'a qoldig'i va xavfsizlik
+- **A. Xavfsizlik va ishonchlilik:**
+  1. `initData` muddati tekshiriladi (`auth_date`, standart 24 soat — `INIT_DATA_MAX_AGE_SECONDS`).
+  2. Sovg'a **qoldig'i** (`Prize.stock`): har yutuqda 1 ta kamayadi, 0 bo'lsa barabandan chiqadi.
+     Bo'sh — cheksiz. Oxirgi donaga bir vaqtda ikki kishi tushsa, faqat bittasiga beriladi.
+  3. **Referal endi do'st yutug'ini rasmiylashtirgach hisoblanadi** (soxta akkauntlarga qarshi).
+     Eski referallar migratsiyada tasdiqlangan deb belgilandi — balanslar o'zgarmadi.
+  4. Sovg'ani **qaysi xodim bergani** saqlanadi (`WinningResult.used_by`).
+  5. Promokod `TX-XXXXXX` (6 belgi, 887 mln variant, o'xshash belgilarsiz), tasodif `secrets` orqali.
+  6. Statistikada "O'quvchilar" = forma to'ldirganlar; botdagi jami alohida ko'rsatiladi.
+- **B. Bot xabarlari:**
+  1. `BotMessage` navbati + bot jarayonidagi fon sikli (`bot/worker.py`) — sekundiga ~20 xabar,
+     flood-limit, bloklaganlar avtomatik belgilanadi. Qo'shimcha kutubxona kerak emas.
+  2. Dashboard → **Xabarlar**: auditoriya tanlab ommaviy xabar, progress, to'xtatish.
+  3. Muddat tugashidan 24 soat oldin avtomatik **eslatma**; EXPIRED holati har 10 daqiqada yangilanadi.
+  4. Referal tasdiqlanganda taklif qiluvchiga progress xabari. `/start` bosgan har kim bazaga yoziladi.
+- **C. MiniApp:**
+  1. **Majburiy obuna**: kanallarga a'zo bo'lmaguncha yangi spin berilmaydi (server tekshiradi,
+     `getChatMember`). MiniApp'da kanallar kartasi va «Obunani tekshirish»; bot `/start` da ham tugmalar.
+     Bot kanalda admin bo'lmasa, o'sha kanal tekshirilmaydi (aksiya to'xtab qolmaydi).
+  2. **Aksiya muddati**: boshlanish/tugash vaqti, yopiq paytda banner; rasmiylashtirish davom etadi.
+  3. **Kunlik bonus** (+1 aylantirish, kuniga bir marta) — dashboarddan yoqiladi.
+  4. G'oliblar bo'limida **Top taklifchilar** reytingi.
+- **D. Dashboard:** **Sozlamalar** sahifasi (kanallar + «Botni tekshirish», aksiya, bonus,
+  necha do'st = +1 spin), **konversiya voronkasi**, **xodimlar faoliyati**, qoldiq ustuni.
+- **Yangi API:** `POST /api/check-subscription/`, `POST /api/daily-bonus/`, `GET /api/top-referrers/`.
+- **Migratsiyalar:** `0009`–`0011`. **Deploydan keyin `texnopark-bot` servisini qayta ishga tushirish shart**
+  (xabarlar navbatini u yuboradi).
+
+---
 
 ### 2026-09-15 - Versiya: v1.2.1
 - **Turi:** Parolni O'zgartirish Sahifasi va Yetim Rasm Fayllarini Tozalash

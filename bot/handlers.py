@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from asgiref.sync import sync_to_async
@@ -9,17 +10,20 @@ from telegram import (
     Update,
     WebAppInfo,
 )
+from telegram.error import TelegramError
 from telegram.ext import CommandHandler, ContextTypes
+from telegram.helpers import escape_markdown
 
-from app_main.models import StudentLead
 from app_main.services import (
-    REFERRALS_PER_SPIN,
     check_user_spin_status,
     get_pending_winning,
     process_referral,
-    referral_progress,
+    referrals_per_spin,
 )
+from app_main.messaging import register_bot_user
+from app_main.subscription import MEMBER_STATUSES, get_required_channels
 from bot.utils import get_webapp_url
+from bot.worker import outbox_loop
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +32,28 @@ logger = logging.getLogger(__name__)
 # chaqirilsa SynchronousOnlyOperation xatosi chiqadi. Shu sabab barcha
 # baza bilan ishlovchi funksiyalar sync_to_async orqali o'raladi.
 process_referral_async = sync_to_async(process_referral, thread_sensitive=True)
+register_bot_user_async = sync_to_async(register_bot_user, thread_sensitive=True)
+referrals_per_spin_async = sync_to_async(referrals_per_spin, thread_sensitive=True)
+get_required_channels_async = sync_to_async(get_required_channels, thread_sensitive=True)
+
+
+async def unjoined_channel_buttons(context: ContextTypes.DEFAULT_TYPE, user_id: int):
+    """
+    Foydalanuvchi hali obuna bo'lmagan majburiy kanallar uchun tugmalar.
+    Tekshirib bo'lmagan kanal (bot admin emas) ko'rsatilmaydi — MiniApp ham
+    uni talab qilmaydi.
+    """
+    rows = []
+    for channel in await get_required_channels_async():
+        try:
+            member = await context.bot.get_chat_member(channel.chat_id, user_id)
+        except TelegramError as e:
+            logger.warning("Kanalni tekshirib bo'lmadi (%s): %s", channel.chat_id, e)
+            continue
+        joined = member.status in MEMBER_STATUSES or getattr(member, 'is_member', False)
+        if not joined and channel.link:
+            rows.append([InlineKeyboardButton(f"📢 {channel.title}", url=channel.link)])
+    return rows
 
 
 @sync_to_async(thread_sensitive=True)
@@ -57,27 +83,18 @@ def get_user_winnings(telegram_id: int):
     return available_spins, rows, pending_title
 
 
-@sync_to_async(thread_sensitive=True)
-def get_invited_count(telegram_id: int) -> int:
-    return StudentLead.objects.filter(referrer__telegram_id=telegram_id).count()
-
-
-async def notify_referrer(context: ContextTypes.DEFAULT_TYPE, referrer_tg_id: int, spin_awarded: bool):
-    """Taklif qiluvchiga yangi do'st qo'shilgani va progress haqida xabar."""
-    if spin_awarded:
-        text = (
-            f"🎉 **{REFERRALS_PER_SPIN} ta do'stingiz qo'shildi!**\n\n"
-            f"Sizga barabanni aylantirish uchun **+1 imkoniyat** berildi. "
-            f"Omadingizni sinab ko'ring!"
-        )
-    else:
-        progress = referral_progress(await get_invited_count(referrer_tg_id))
-        text = (
-            f"👥 Do'stingiz havolangiz orqali qo'shildi!\n\n"
-            f"Progress: **{progress}/{REFERRALS_PER_SPIN}** — yana "
-            f"{REFERRALS_PER_SPIN - progress} ta do'st taklif qiling va "
-            f"**+1 aylantirish** oling."
-        )
+async def notify_referrer(context: ContextTypes.DEFAULT_TYPE, referrer_tg_id: int, friend_name: str):
+    """
+    Taklif qiluvchiga do'sti havola orqali kirgani haqida xabar. Bonus
+    do'st birinchi yutug'ini rasmiylashtirgandan keyin hisoblanadi.
+    """
+    name = escape_markdown(friend_name or "Do'stingiz", version=1)
+    per_spin = await referrals_per_spin_async()
+    text = (
+        f"👥 *{name}* havolangiz orqali botga kirdi!\n\n"
+        f"U barabanni aylantirib, yutug'ini rasmiylashtirgach hisobingizga "
+        f"qo'shiladi. Har {per_spin} ta do'st uchun *+1 aylantirish*."
+    )
 
     reply_markup, _ = _webapp_keyboard()
     try:
@@ -120,20 +137,27 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if arg.startswith("ref_"):
             try:
                 referrer_tg_id = int(arg.split("ref_")[1])
-                success, _referrer_lead, spin_awarded = await process_referral_async(
-                    referrer_tg_id, new_user_id, new_user.first_name if new_user else ''
+                friend_name = new_user.first_name if new_user else ''
+                success, _referrer_lead = await process_referral_async(
+                    referrer_tg_id, new_user_id, friend_name
                 )
                 if success:
-                    logger.info(
-                        "Referral processed: %s invited %s (spin awarded: %s)",
-                        referrer_tg_id, new_user_id, spin_awarded
-                    )
-                    await notify_referrer(context, referrer_tg_id, spin_awarded)
+                    logger.info("Referral linked: %s invited %s", referrer_tg_id, new_user_id)
+                    await notify_referrer(context, referrer_tg_id, friend_name)
             except Exception as e:
                 logger.error("Failed to process referral: %s", e)
 
-    reply_markup, webapp_url = _webapp_keyboard()
-    user_first_name = new_user.first_name if new_user else "Foydalanuvchi"
+    # Referaldan keyin — aks holda process_referral uni "eski foydalanuvchi" deb o'ylardi.
+    # Yozuv bo'lsa ommaviy xabarlar hali aylantirmagan foydalanuvchiga ham yetadi.
+    if new_user:
+        try:
+            await register_bot_user_async(new_user.id, new_user.first_name, new_user.last_name)
+        except Exception as e:
+            logger.error("Failed to register bot user %s: %s", new_user.id, e)
+
+    channel_rows = await unjoined_channel_buttons(context, new_user_id) if new_user else []
+    reply_markup, webapp_url = _webapp_keyboard(extra_rows=channel_rows)
+    user_first_name = escape_markdown(new_user.first_name if new_user else "Foydalanuvchi", version=1)
 
     if webapp_url.startswith("https://"):
         text = (
@@ -144,6 +168,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🎁 Yutuqlaringizni va ularni qayerdan olishni ko'rish uchun "
             f"/yutuqlarim buyrug'ini yuboring."
         )
+        if channel_rows:
+            text += (
+                "\n\n📢 **Barabanni aylantirish uchun quyidagi kanallarga obuna bo'ling**, "
+                "so'ng «Ochish» tugmasini bosing."
+            )
     else:
         text = (
             f"👋 **Salom, {user_first_name}!**\n\n"
@@ -236,6 +265,7 @@ async def my_prizes_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/yordam — qisqa qo'llanma."""
     reply_markup, _ = _webapp_keyboard()
+    per_spin = await referrals_per_spin_async()
     await update.message.reply_text(
         "ℹ️ **Qanday ishlaydi?**\n\n"
         "1️⃣ Tugmani bosib MiniApp'ni oching va barabanni aylantiring.\n"
@@ -243,7 +273,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "3️⃣ «Yutuqlarim» bo'limidan QR-kodni oching — uning ostida "
         "sovg'ani olish manzili ko'rsatiladi.\n"
         "4️⃣ Texnopark xodimiga QR-kodni ko'rsating.\n\n"
-        f"Har {REFERRALS_PER_SPIN} ta taklif qilgan do'stingiz uchun **+1 aylantirish** olasiz.\n\n"
+        f"Har {per_spin} ta taklif qilgan do'stingiz uchun **+1 aylantirish** olasiz "
+        "(do'st birinchi yutug'ini rasmiylashtirgach hisoblanadi).\n\n"
         "Buyruqlar:\n"
         "/start — barabanni ochish\n"
         "/yutuqlarim — yutuqlar va manzillar\n"
@@ -253,13 +284,30 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+def _webapp_markup():
+    return _webapp_keyboard()[0]
+
+
 async def post_init(application):
-    """Telegram menyusidagi buyruqlar ro'yxati."""
+    """Telegram menyusidagi buyruqlar va xabarlar navbatini yuboruvchi fon sikli."""
     await application.bot.set_my_commands([
         BotCommand("start", "Barabanni ochish"),
         BotCommand("yutuqlarim", "Yutuqlarim va manzillar"),
         BotCommand("yordam", "Qanday ishlaydi?"),
     ])
+    application.bot_data['outbox_task'] = asyncio.create_task(
+        outbox_loop(application, _webapp_markup)
+    )
+
+
+async def post_shutdown(application):
+    task = application.bot_data.get('outbox_task')
+    if task and not task.done():
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 def setup_handlers(application):

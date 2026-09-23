@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import redirect, render
 from django.views.decorators.clickjacking import xframe_options_exempt
 
@@ -9,7 +10,9 @@ def index_view(request):
     """
     Telegram MiniApp.
     """
-    return render(request, 'miniapp/index.html')
+    return render(request, 'miniapp/index.html', {
+        'bot_username': settings.TELEGRAM_BOT_USERNAME,
+    })
 
 
 def admin_scan_redirect(request):

@@ -1,0 +1,117 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Xabarlar{% endblock %}
+
+{% block head_extra %}
+  {# Yuborish davom etayotganda progress o'zi yangilanib tursin #}
+  {% if is_sending %}<meta http-equiv="refresh" content="6">{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>Xabarlar</h2>
+    <p class="sub">Bot orqali foydalanuvchilarga ommaviy xabar yuborish</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'dashboard-broadcast-create' %}" class="btn btn-primary">
+      <svg class="ic"><use href="#ic-send"/></svg> Yangi xabar
+    </a>
+  </div>
+</div>
+
+<div class="msg info" style="margin-bottom:1.1rem">
+  <svg class="ic"><use href="#ic-info"/></svg>
+  <span>
+    Xabarlarni <b>bot jarayoni</b> (texnopark-bot servisi) sekundiga ~20 tadan yuboradi.
+    Muddati tugashiga 24 soat qolgan sovg'alar egalariga eslatma ham avtomatik ketadi.
+    {% if pending_total %}Navbatda: <b>{{ pending_total }}</b> ta xabar{% if pending_reminders %} ({{ pending_reminders }} ta eslatma){% endif %}.{% endif %}
+    {% if blocked_count %}Botni bloklaganlar: <b>{{ blocked_count }}</b> — ularga xabar yuborilmaydi.{% endif %}
+  </span>
+</div>
+
+<div class="panel">
+  <div class="panel-title">
+    <span>Yuborilgan xabarlar</span>
+    {% if is_sending %}<span class="hint">sahifa har 6 soniyada yangilanadi</span>{% endif %}
+  </div>
+
+  {% if page_obj %}
+    <div class="table-wrap">
+      <table class="table-cards">
+        <thead>
+          <tr>
+            <th scope="col">Xabar</th>
+            <th scope="col">Kimlarga</th>
+            <th scope="col">Holati</th>
+            <th scope="col" style="min-width:180px">Natija</th>
+            <th scope="col">Vaqti</th>
+            <th scope="col" style="text-align:right">Amal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in page_obj %}
+            <tr>
+              <td data-label="Xabar">
+                <span class="td-strong" style="white-space:pre-line">{{ b.text|truncatechars:120 }}</span>
+                {% if b.with_button %}<div class="td-muted">+ «Ochish» tugmasi</div>{% endif %}
+              </td>
+              <td data-label="Kimlarga" class="td-muted">{{ b.get_audience_display }}</td>
+              <td data-label="Holati">
+                {% if b.status == 'SENDING' %}
+                  <span class="badge PENDING">{{ b.get_status_display }}</span>
+                {% elif b.status == 'DONE' %}
+                  <span class="badge on">{{ b.get_status_display }}</span>
+                {% else %}
+                  <span class="badge off">{{ b.get_status_display }}</span>
+                {% endif %}
+              </td>
+              <td data-label="Natija">
+                <div class="bar-row" style="margin:0">
+                  <div class="bar-head">
+                    <span class="name">{{ b.sent_count }} / {{ b.total }}</span>
+                    <span class="val">{% if b.failed_count %}{{ b.failed_count }} ta yetmadi{% endif %}</span>
+                  </div>
+                  <div class="bar-track">
+                    <div class="bar-fill" style="width:{{ b.progress_percent }}%;background:var(--accent)"></div>
+                  </div>
+                </div>
+              </td>
+              <td data-label="Vaqti" class="td-muted">
+                {{ b.created_at|date:"d.m.Y H:i" }}
+                {% if b.created_by %}<div>{{ b.created_by.get_username }}</div>{% endif %}
+              </td>
+              <td data-label="Amal"{% if b.status != 'SENDING' %} class="is-empty-action"{% endif %}>
+                <div class="row-actions" style="justify-content:flex-end">
+                  {% if b.status == 'SENDING' %}
+                    <form method="post" action="{% url 'dashboard-broadcast-cancel' b.pk %}"
+                          onsubmit="return confirm('Yuborishni to\'xtatasizmi? Qolgan xabarlar yuborilmaydi.');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-danger">
+                        <svg class="ic"><use href="#ic-x"/></svg> To'xtatish
+                      </button>
+                    </form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% include 'dashboard/_pagination.html' %}
+
+  {% else %}
+    <div class="empty">
+      <span class="icon"><svg class="ic"><use href="#ic-send"/></svg></span>
+      Hali ommaviy xabar yuborilmagan.
+      <div style="margin-top:.9rem">
+        <a href="{% url 'dashboard-broadcast-create' %}" class="btn btn-sm btn-primary">Birinchi xabarni yozish</a>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

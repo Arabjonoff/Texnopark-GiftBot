@@ -1,0 +1,195 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Sozlamalar{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>Sozlamalar</h2>
+    <p class="sub">Majburiy obuna, aksiya muddati va bonuslar</p>
+  </div>
+</div>
+
+<div class="grid-2">
+
+  <!-- ============ Majburiy obuna kanallari ============ -->
+  <div class="panel">
+    <div class="panel-title">
+      <span>Majburiy obuna kanallari</span>
+      {% if channels %}
+        <a href="?check=1" class="btn btn-sm">
+          <svg class="ic"><use href="#ic-check"/></svg> Botni tekshirish
+        </a>
+      {% endif %}
+    </div>
+
+    {% if not site.subscription_required %}
+      <div class="msg warning" style="margin-bottom:1rem">
+        <svg class="ic"><use href="#ic-alert"/></svg>
+        <span>Majburiy obuna hozir <b>o'chiq</b> — pastdagi sozlamalardan yoqing.</span>
+      </div>
+    {% endif %}
+
+    <div class="msg info" style="margin-bottom:1rem">
+      <svg class="ic"><use href="#ic-info"/></svg>
+      <span>
+        Bot har bir kanalda <b>administrator</b> bo'lishi shart — aks holda Telegram obunachilar
+        ro'yxatini bermaydi va bu kanal tekshirilmaydi (foydalanuvchilar to'xtatilmaydi).
+      </span>
+    </div>
+
+    {% if channels %}
+      <div class="table-wrap" style="margin-bottom:1.2rem">
+        <table class="table-cards">
+          <thead>
+            <tr>
+              <th scope="col">Kanal</th>
+              <th scope="col">Holati</th>
+              <th scope="col" style="text-align:right">Amallar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ch in channels %}
+              <tr>
+                <td data-label="Kanal">
+                  <span class="td-strong">{{ ch.title }}</span>
+                  <div class="td-muted">
+                    {{ ch.chat_id }}{% if ch.link %} · <a href="{{ ch.link }}" target="_blank" rel="noopener" style="text-decoration:underline">havola</a>{% endif %}
+                  </div>
+                  {% if checked %}
+                    <div style="font-size:.75rem;margin-top:.25rem;color:{% if ch.check_ok %}var(--success){% else %}var(--danger){% endif %}">
+                      {% if ch.check_ok %}✓{% else %}✗{% endif %} {{ ch.check_note }}
+                    </div>
+                  {% endif %}
+                </td>
+                <td data-label="Holati">
+                  {% if ch.is_active %}<span class="badge on">Talab qilinadi</span>{% else %}<span class="badge off">O'chiq</span>{% endif %}
+                </td>
+                <td data-label="Amallar">
+                  <div class="row-actions" style="justify-content:flex-end">
+                    <form method="post" action="{% url 'dashboard-channel-toggle' ch.pk %}">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm" title="Yoqish / o'chirish">
+                        <svg class="ic"><use href="#ic-power"/></svg>
+                      </button>
+                    </form>
+                    <form method="post" action="{% url 'dashboard-channel-delete' ch.pk %}"
+                          onsubmit="return confirm('«{{ ch.title|escapejs }}» kanalini o\'chirasizmi?');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-danger" title="O'chirish">
+                        <svg class="ic"><use href="#ic-trash"/></svg>
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty" style="margin-bottom:1rem">
+        <span class="icon"><svg class="ic"><use href="#ic-megaphone"/></svg></span>
+        Hali kanal qo'shilmagan — obuna talab qilinmaydi.
+      </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'dashboard-channel-create' %}" novalidate>
+      {% csrf_token %}
+      <div class="form-grid">
+        <div class="form-row">
+          <label for="{{ channel_form.title.id_for_label }}">Nomi *</label>
+          {{ channel_form.title }}
+          {% for error in channel_form.title.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        </div>
+        <div class="form-row">
+          <label for="{{ channel_form.chat_id.id_for_label }}">Username yoki ID *</label>
+          {{ channel_form.chat_id }}
+          {% for error in channel_form.chat_id.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        </div>
+        <div class="form-row full">
+          <label for="{{ channel_form.invite_link.id_for_label }}">Taklif havolasi</label>
+          {{ channel_form.invite_link }}
+          {% for error in channel_form.invite_link.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          <span class="help">Ochiq kanal (@username) uchun shart emas — havola avtomatik yasaladi.</span>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="margin-top:1rem">
+        <svg class="ic"><use href="#ic-plus"/></svg> Kanal qo'shish
+      </button>
+    </form>
+  </div>
+
+  <!-- ============ Umumiy sozlamalar ============ -->
+  <form method="post" class="panel" novalidate>
+    {% csrf_token %}
+    <div class="panel-title">Aksiya va bonuslar</div>
+
+    {% if form.non_field_errors %}
+      {% for error in form.non_field_errors %}<div class="msg error" style="margin-bottom:1rem"><span>{{ error }}</span></div>{% endfor %}
+    {% endif %}
+
+    <div class="form-grid">
+      <div class="form-row full">
+        <div class="check-row">
+          {{ form.subscription_required }}
+          <label for="{{ form.subscription_required.id_for_label }}">Majburiy obuna yoqilgan</label>
+        </div>
+        <span class="help">O'chirilsa, kanallar ro'yxati saqlanib qoladi, lekin tekshirilmaydi.</span>
+      </div>
+
+      <div class="form-row">
+        <label for="{{ form.campaign_start.id_for_label }}">Aksiya boshlanishi</label>
+        {{ form.campaign_start }}
+        {% for error in form.campaign_start.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        <span class="help">Bo'sh — darhol boshlangan.</span>
+      </div>
+
+      <div class="form-row">
+        <label for="{{ form.campaign_end.id_for_label }}">Aksiya tugashi</label>
+        {{ form.campaign_end }}
+        {% for error in form.campaign_end.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        <span class="help">Tugagach baraban yopiladi. Yutuqlarni olish davom etadi.</span>
+      </div>
+
+      <div class="form-row full">
+        <label for="{{ form.campaign_closed_message.id_for_label }}">Aksiya yopiq paytdagi matn</label>
+        {{ form.campaign_closed_message }}
+        {% for error in form.campaign_closed_message.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        <span class="help">
+          Bo'sh qolsa standart matn. Hozir:
+          <b>{% if site.campaign_state == 'active' %}aksiya davom etmoqda{% elif site.campaign_state == 'not_started' %}hali boshlanmagan{% else %}tugagan{% endif %}</b>.
+        </span>
+      </div>
+
+      <div class="form-row">
+        <label for="{{ form.referrals_per_spin.id_for_label }}">Necha do'st = +1 aylantirish *</label>
+        {{ form.referrals_per_spin }}
+        {% for error in form.referrals_per_spin.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        <span class="help">Do'st yutug'ini rasmiylashtirgandagina hisoblanadi.</span>
+      </div>
+
+      <div class="form-row">
+        <label>Kunlik bonus</label>
+        <div class="check-row" style="padding-top:.45rem">
+          {{ form.daily_bonus_enabled }}
+          <label for="{{ form.daily_bonus_enabled.id_for_label }}">Har kuni +1 aylantirish</label>
+        </div>
+        <span class="help">MiniApp'da «Kunlik bonus» kartasi paydo bo'ladi.</span>
+      </div>
+    </div>
+
+    <div class="msg info" style="margin-top:1.2rem">
+      <svg class="ic"><use href="#ic-info"/></svg>
+      <span>O'zgarishlar MiniApp'da 30 soniya ichida kuchga kiradi.</span>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-block" style="margin-top:1rem">
+      <svg class="ic"><use href="#ic-check"/></svg> Saqlash
+    </button>
+  </form>
+
+</div>
+
+{% endblock %}

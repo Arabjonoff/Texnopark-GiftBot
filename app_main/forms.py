@@ -4,7 +4,7 @@ import requests
 from django import forms
 from django.db import models
 
-from app_main.models import Prize, PrizeCategory
+from app_main.models import Broadcast, Prize, PrizeCategory, RequiredChannel, SiteSettings
 
 
 # Google Maps havolalaridan koordinata ajratib olish shablonlari.
@@ -81,6 +81,7 @@ class PrizeForm(forms.ModelForm):
             'image_url',
             'probability',
             'valid_days',
+            'stock',
             'pickup_address',
             'latitude',
             'longitude',
@@ -115,6 +116,12 @@ class PrizeForm(forms.ModelForm):
                 'min': 1,
                 'max': 365,
                 'step': 1,
+            }),
+            'stock': forms.NumberInput(attrs={
+                'class': 'form-input',
+                'min': 0,
+                'step': 1,
+                'placeholder': "Bo'sh — cheksiz",
             }),
             'pickup_address': forms.TextInput(attrs={
                 'class': 'form-input',
@@ -307,4 +314,141 @@ class PrizeCategoryForm(forms.ModelForm):
         if cleaned.get('clear_image'):
             cleaned['image'] = None
             self.instance.image = None
+        return cleaned
+
+
+class BroadcastForm(forms.ModelForm):
+    """Dashboarddan ommaviy xabar yuborish formasi."""
+
+    class Meta:
+        model = Broadcast
+        fields = ['text', 'audience', 'with_button']
+        widgets = {
+            'text': forms.Textarea(attrs={
+                'class': 'form-input',
+                'rows': 7,
+                'maxlength': 4000,
+                'placeholder': "Masalan: Bugun soat 18:00 gacha barcha sovg'alarni olib ketish mumkin!",
+            }),
+            'audience': forms.RadioSelect,
+            'with_button': forms.CheckboxInput(attrs={'class': 'form-check'}),
+        }
+
+    def clean_text(self):
+        text = (self.cleaned_data.get('text') or '').strip()
+        if not text:
+            raise forms.ValidationError("Xabar matni bo'sh bo'lishi mumkin emas.")
+        return text
+
+
+DATETIME_LOCAL_FORMAT = '%Y-%m-%dT%H:%M'
+
+
+class SiteSettingsForm(forms.ModelForm):
+    """Dashboard → Sozlamalar: aksiya muddati, obuna, bonuslar."""
+
+    class Meta:
+        model = SiteSettings
+        fields = [
+            'subscription_required',
+            'campaign_start',
+            'campaign_end',
+            'campaign_closed_message',
+            'daily_bonus_enabled',
+            'referrals_per_spin',
+        ]
+        widgets = {
+            'subscription_required': forms.CheckboxInput(attrs={'class': 'form-check'}),
+            'daily_bonus_enabled': forms.CheckboxInput(attrs={'class': 'form-check'}),
+            'campaign_start': forms.DateTimeInput(
+                format=DATETIME_LOCAL_FORMAT, attrs={'class': 'form-input', 'type': 'datetime-local'}
+            ),
+            'campaign_end': forms.DateTimeInput(
+                format=DATETIME_LOCAL_FORMAT, attrs={'class': 'form-input', 'type': 'datetime-local'}
+            ),
+            'campaign_closed_message': forms.TextInput(attrs={
+                'class': 'form-input',
+                'maxlength': 255,
+                'placeholder': "Masalan: Aksiya yakunlandi, keyingisi tez orada!",
+            }),
+            'referrals_per_spin': forms.NumberInput(attrs={
+                'class': 'form-input', 'min': 1, 'max': 50, 'step': 1,
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ('campaign_start', 'campaign_end'):
+            self.fields[name].input_formats = [DATETIME_LOCAL_FORMAT, '%Y-%m-%d %H:%M']
+
+    def clean_referrals_per_spin(self):
+        value = self.cleaned_data.get('referrals_per_spin')
+        if value is None or value < 1 or value > 50:
+            raise forms.ValidationError("1 dan 50 gacha bo'lishi kerak.")
+        return value
+
+    def clean_campaign_closed_message(self):
+        return (self.cleaned_data.get('campaign_closed_message') or '').strip()
+
+    def clean(self):
+        cleaned = super().clean()
+        start, end = cleaned.get('campaign_start'), cleaned.get('campaign_end')
+        if start and end and end <= start:
+            self.add_error('campaign_end', "Tugash vaqti boshlanishidan keyin bo'lishi kerak.")
+        return cleaned
+
+
+_CHANNEL_USERNAME = re.compile(r'^@[A-Za-z][A-Za-z0-9_]{3,31}$')
+_CHANNEL_NUMERIC_ID = re.compile(r'^-100\d{5,}$')
+
+
+class RequiredChannelForm(forms.ModelForm):
+    """Majburiy obuna kanali."""
+
+    class Meta:
+        model = RequiredChannel
+        fields = ['title', 'chat_id', 'invite_link']
+        widgets = {
+            'title': forms.TextInput(attrs={
+                'class': 'form-input', 'maxlength': 100, 'placeholder': "Yoshlar Texnoparki",
+            }),
+            'chat_id': forms.TextInput(attrs={
+                'class': 'form-input', 'maxlength': 100, 'placeholder': "@texnopark_uz",
+            }),
+            'invite_link': forms.URLInput(attrs={
+                'class': 'form-input', 'placeholder': "https://t.me/+AbCdEf (yopiq kanal uchun)",
+            }),
+        }
+
+    def clean_title(self):
+        title = (self.cleaned_data.get('title') or '').strip()
+        if not title:
+            raise forms.ValidationError("Nomini kiriting.")
+        return title
+
+    def clean_chat_id(self):
+        value = (self.cleaned_data.get('chat_id') or '').strip()
+        # https://t.me/kanal havolasi kiritilsa ham @kanal ga aylantiramiz
+        match = re.match(r'^(?:https?://)?t\.me/([A-Za-z][A-Za-z0-9_]{3,31})/?$', value)
+        if match:
+            value = '@' + match.group(1)
+        elif value and not value.startswith(('@', '-')):
+            value = '@' + value
+        if not (_CHANNEL_USERNAME.match(value) or _CHANNEL_NUMERIC_ID.match(value)):
+            raise forms.ValidationError(
+                "Ochiq kanal uchun @username, yopiq kanal uchun -100 bilan boshlanuvchi ID kiriting."
+            )
+        return value
+
+    def clean_invite_link(self):
+        link = (self.cleaned_data.get('invite_link') or '').strip()
+        if link and not re.match(r'^https://t\.me/', link):
+            raise forms.ValidationError("Havola https://t.me/ bilan boshlanishi kerak.")
+        return link
+
+    def clean(self):
+        cleaned = super().clean()
+        chat_id = cleaned.get('chat_id') or ''
+        if chat_id.startswith('-') and not cleaned.get('invite_link'):
+            self.add_error('invite_link', "Yopiq kanal uchun taklif havolasi majburiy.")
         return cleaned

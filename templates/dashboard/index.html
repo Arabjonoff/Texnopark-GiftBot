@@ -20,6 +20,26 @@
   </div>
 </div>
 
+{% if site.campaign_state != 'active' %}
+  <div class="msg warning" style="margin-bottom:1.1rem">
+    <svg class="ic"><use href="#ic-clock"/></svg>
+    <span>
+      Aksiya {% if site.campaign_state == 'ended' %}<b>tugagan</b>{% else %}<b>hali boshlanmagan</b>{% endif %} —
+      baraban yopiq. <a href="{% url 'dashboard-settings' %}" style="text-decoration:underline">Sozlamalar</a>.
+    </span>
+  </div>
+{% endif %}
+
+{% if stats.out_of_stock %}
+  <div class="msg warning" style="margin-bottom:1.1rem">
+    <svg class="ic"><use href="#ic-alert"/></svg>
+    <span>
+      <b>{{ stats.out_of_stock }} ta sovg'aning qoldig'i tugagan</b> — ular barabanda chiqmayapti.
+      <a href="{% url 'dashboard-prizes' %}" style="text-decoration:underline">Qoldiqni to'ldiring</a>.
+    </span>
+  </div>
+{% endif %}
+
 {% if prob.active_count == 0 %}
   <div class="msg warning" style="margin-bottom:1.1rem">
     <svg class="ic"><use href="#ic-alert"/></svg>
@@ -36,7 +56,7 @@
   <div class="stat-card">
     <div class="stat-label">O'quvchilar</div>
     <div class="stat-value">{{ stats.total_leads }}</div>
-    <div class="stat-meta">Bugun: <b>+{{ stats.leads_today }}</b> · 7 kunda: {{ stats.leads_week }}</div>
+    <div class="stat-meta">Bugun: <b>+{{ stats.leads_today }}</b> · 7 kunda: {{ stats.leads_week }} · Botda jami: {{ stats.total_users }}</div>
   </div>
 
   <div class="stat-card gold">
@@ -66,7 +86,7 @@
   <div class="stat-card">
     <div class="stat-label">Referral orqali</div>
     <div class="stat-value">{{ stats.referral_count }}</div>
-    <div class="stat-meta">Do'st taklifi bilan kelganlar</div>
+    <div class="stat-meta">Yutug'ini rasmiylashtirgan taklif qilingan do'stlar</div>
   </div>
 
 </div>
@@ -141,6 +161,65 @@
       </div>
     {% else %}
       <div class="empty"><span class="icon"><svg class="ic"><use href="#ic-gift"/></svg></span>Sovg'alar qo'shilmagan</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- ============ Voronka + Xodimlar ============ -->
+<div class="grid-2">
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>Konversiya voronkasi</span>
+      <span class="hint">foydalanuvchilar qaysi bosqichgacha yetgan</span>
+    </div>
+    {% for step in funnel %}
+      <div class="bar-row">
+        <div class="bar-head">
+          <span class="name">{{ step.label }}</span>
+          <span class="val">
+            {{ step.count }} · {{ step.percent }}%
+            {% if step.step_percent is not None %}<span class="td-muted">(oldingidan {{ step.step_percent }}%)</span>{% endif %}
+          </span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:{{ step.percent|unlocalize }}%;background:var(--accent)"></div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>Xodimlar faoliyati</span>
+      <span class="hint">kim nechta sovg'a bergan</span>
+    </div>
+    {% if staff_activity %}
+      <div class="table-wrap">
+        <table class="table-cards">
+          <thead>
+            <tr>
+              <th scope="col">Xodim</th>
+              <th scope="col" style="text-align:right">Bugun</th>
+              <th scope="col" style="text-align:right">Jami</th>
+              <th scope="col">Oxirgisi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in staff_activity %}
+              <tr>
+                <td data-label="Xodim" class="td-strong">{{ u.get_username }}</td>
+                <td data-label="Bugun" style="text-align:right">{{ u.issued_today }}</td>
+                <td data-label="Jami" style="text-align:right" class="td-strong">{{ u.issued_total }}</td>
+                <td data-label="Oxirgisi" class="td-muted">{{ u.last_issued|date:"d.m.Y H:i" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty"><span class="icon"><svg class="ic"><use href="#ic-users"/></svg></span>Hali QR skaner orqali sovg'a berilmagan</div>
     {% endif %}
   </div>
 

@@ -112,6 +112,7 @@
             <th scope="col" style="text-align:right">Chiqish %</th>
             <th scope="col" style="text-align:right">Muddat</th>
             <th scope="col" style="text-align:right">Yutuqlar</th>
+            <th scope="col" style="text-align:right">Qoldiq</th>
             <th scope="col">Holati</th>
             <th scope="col" style="text-align:right">Amallar</th>
           </tr>
@@ -143,7 +144,7 @@
               <td data-label="Daraja"><span class="badge {{ prize.rarity }}">{{ prize.get_rarity_display }}</span></td>
               <td data-label="Og'irlik" style="text-align:right" class="td-strong">{{ prize.probability }}</td>
               <td data-label="Chiqish %" style="text-align:right">
-                {% if prize.is_active and prob.total_weight %}
+                {% if prize.is_active and not prize.is_out_of_stock and prob.total_weight %}
                   <span class="td-strong">
                     {% widthratio prize.probability prob.total_weight 100 %}%
                   </span>
@@ -153,6 +154,15 @@
               </td>
               <td data-label="Muddat" style="text-align:right" class="td-muted">{{ prize.valid_days }} kun</td>
               <td data-label="Yutuqlar" style="text-align:right" class="td-muted">{{ prize.win_count }}</td>
+              <td data-label="Qoldiq" style="text-align:right">
+                {% if prize.stock is None %}
+                  <span class="td-muted" title="Cheksiz">∞</span>
+                {% elif prize.stock == 0 %}
+                  <span class="badge off" title="Tugagan — barabanda chiqmaydi">Tugagan</span>
+                {% else %}
+                  <span class="td-strong">{{ prize.stock }}</span>
+                {% endif %}
+              </td>
               <td data-label="Holati">
                 {% if prize.is_active %}
                   <span class="badge on">Aktiv</span>

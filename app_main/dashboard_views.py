@@ -24,13 +24,32 @@ from django.views.decorators.http import require_POST
 from app_main.dashboard_services import (
     get_daily_chart,
     get_dashboard_stats,
+    get_funnel,
+    get_staff_activity,
     get_prize_performance,
     get_probability_summary,
     get_rarity_breakdown,
     get_recent_winnings,
 )
-from app_main.forms import PrizeCategoryForm, PrizeForm
-from app_main.models import Prize, PrizeCategory, StudentLead, WinningResult
+from app_main.forms import (
+    BroadcastForm,
+    PrizeCategoryForm,
+    PrizeForm,
+    RequiredChannelForm,
+    SiteSettingsForm,
+)
+from app_main.messaging import audience_counts, cancel_broadcast, create_broadcast, pending_counts_by_kind
+from app_main.models import (
+    Broadcast,
+    BotMessage,
+    Prize,
+    PrizeCategory,
+    RequiredChannel,
+    SiteSettings,
+    StudentLead,
+    WinningResult,
+)
+from app_main.subscription import diagnose_channel
 
 
 def _is_staff(user):
@@ -178,6 +197,9 @@ def dashboard_index(request):
         'performance': get_prize_performance(),
         'recent': get_recent_winnings(10),
         'prob': get_probability_summary(),
+        'funnel': get_funnel(),
+        'staff_activity': get_staff_activity(),
+        'site': SiteSettings.load(),
     }
     return render(request, 'dashboard/index.html', context)
 
@@ -527,7 +549,7 @@ def _filter_winnings(request, queryset):
 
 @staff_required
 def winning_list(request):
-    base = WinningResult.objects.select_related('lead', 'prize')
+    base = WinningResult.objects.select_related('lead', 'prize', 'used_by')
     winnings, filters = _filter_winnings(request, base)
 
     paginator = Paginator(winnings, 25)
@@ -559,9 +581,7 @@ def winning_activate(request, pk):
         winning.save(update_fields=['status'])
         messages.error(request, winning.promo_code + " muddati o'tgan, aktivlashtirib bo'lmaydi.")
     else:
-        winning.status = WinningResult.Status.USED
-        winning.used_at = timezone.now()
-        winning.save(update_fields=['status', 'used_at'])
+        winning.mark_used(request.user)
         messages.success(
             request,
             "{0} — «{1}» {2}ga berildi.".format(
@@ -709,6 +729,151 @@ def category_toggle(request, pk):
             "{0} o'chirildi — {1} ta sovg'a barabandan olib tashlandi.".format(category.title, count)
         )
     return redirect('dashboard-categories')
+
+
+# ---------------------------------------------------------------- Ommaviy xabarlar
+
+@staff_required
+def broadcast_list(request):
+    broadcasts = Broadcast.objects.select_related('created_by')
+    paginator = Paginator(broadcasts, 20)
+    page = paginator.get_page(request.GET.get('page'))
+    pending = pending_counts_by_kind()
+
+    return render(request, 'dashboard/broadcasts.html', {
+        'active_page': 'broadcasts',
+        'page_obj': page,
+        'is_sending': Broadcast.objects.filter(status=Broadcast.Status.SENDING).exists(),
+        'pending_total': sum(pending.values()),
+        'pending_reminders': pending.get(BotMessage.Kind.REMINDER, 0),
+        'blocked_count': StudentLead.objects.filter(bot_blocked=True).count(),
+    })
+
+
+@staff_required
+def broadcast_create(request):
+    if request.method == 'POST':
+        form = BroadcastForm(request.POST)
+        if form.is_valid():
+            broadcast = create_broadcast(
+                form.cleaned_data['text'],
+                form.cleaned_data['audience'],
+                form.cleaned_data['with_button'],
+                created_by=request.user,
+            )
+            if broadcast.total:
+                messages.success(
+                    request,
+                    "Xabar {0} ta foydalanuvchiga navbatga qo'yildi. Bot uni bosqichma-bosqich "
+                    "yuboradi.".format(broadcast.total)
+                )
+            else:
+                messages.error(request, "Tanlangan guruhda birorta ham foydalanuvchi yo'q.")
+            return redirect('dashboard-broadcasts')
+        messages.error(request, "Formada xatolik bor, maydonlarni tekshiring.")
+    else:
+        form = BroadcastForm(initial={'audience': Broadcast.Audience.ALL, 'with_button': True})
+
+    counts = audience_counts()
+    audience_options = [
+        {'value': value, 'label': label, 'count': counts.get(value, 0)}
+        for value, label in Broadcast.Audience.choices
+    ]
+    return render(request, 'dashboard/broadcast_form.html', {
+        'active_page': 'broadcasts',
+        'form': form,
+        'audience_options': audience_options,
+        'selected_audience': form['audience'].value() or Broadcast.Audience.ALL,
+    })
+
+
+@staff_required
+@require_POST
+def broadcast_cancel(request, pk):
+    broadcast = get_object_or_404(Broadcast, pk=pk)
+    if broadcast.status != Broadcast.Status.SENDING:
+        messages.error(request, "Bu xabar allaqachon yakunlangan.")
+    else:
+        removed = cancel_broadcast(broadcast)
+        messages.success(request, "To'xtatildi. {0} ta xabar yuborilmay qoldi.".format(removed))
+    return redirect('dashboard-broadcasts')
+
+
+# ---------------------------------------------------------------- Sozlamalar
+
+def _settings_context(request, settings_form, channel_form):
+    channels = list(RequiredChannel.objects.all())
+    # Bot kanalda admin ekanini tekshirish — Telegram'ga so'rov ketadi,
+    # shuning uchun faqat tugma bosilganda (?check=1)
+    if request.GET.get('check') == '1':
+        for channel in channels:
+            channel.check_ok, channel.check_note = diagnose_channel(channel)
+    return {
+        'active_page': 'settings',
+        'form': settings_form,
+        'channel_form': channel_form,
+        'channels': channels,
+        'checked': request.GET.get('check') == '1',
+        'site': SiteSettings.load(),
+    }
+
+
+@staff_required
+def settings_view(request):
+    site, _ = SiteSettings.objects.get_or_create(pk=1)
+
+    if request.method == 'POST':
+        form = SiteSettingsForm(request.POST, instance=site)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Sozlamalar saqlandi.")
+            return redirect('dashboard-settings')
+        messages.error(request, "Formada xatolik bor, maydonlarni tekshiring.")
+    else:
+        form = SiteSettingsForm(instance=site)
+
+    return render(request, 'dashboard/settings.html', _settings_context(request, form, RequiredChannelForm()))
+
+
+@staff_required
+@require_POST
+def channel_create(request):
+    channel_form = RequiredChannelForm(request.POST)
+    if channel_form.is_valid():
+        last = RequiredChannel.objects.order_by('-sort_order').first()
+        channel = channel_form.save(commit=False)
+        channel.sort_order = (last.sort_order + 10) if last else 0
+        channel.save()
+        messages.success(
+            request,
+            "Kanal qo'shildi: {0}. Botni shu kanalga ADMIN qilib qo'shishni unutmang.".format(channel.title)
+        )
+        return redirect('dashboard-settings')
+
+    messages.error(request, "Kanal qo'shilmadi — maydonlarni tekshiring.")
+    form = SiteSettingsForm(instance=SiteSettings.objects.get_or_create(pk=1)[0])
+    return render(request, 'dashboard/settings.html', _settings_context(request, form, channel_form))
+
+
+@staff_required
+@require_POST
+def channel_toggle(request, pk):
+    channel = get_object_or_404(RequiredChannel, pk=pk)
+    channel.is_active = not channel.is_active
+    channel.save(update_fields=['is_active'])
+    state = "yoqildi" if channel.is_active else "o'chirildi"
+    messages.success(request, "{0} — obuna talabi {1}.".format(channel.title, state))
+    return redirect('dashboard-settings')
+
+
+@staff_required
+@require_POST
+def channel_delete(request, pk):
+    channel = get_object_or_404(RequiredChannel, pk=pk)
+    title = channel.title
+    channel.delete()
+    messages.success(request, "O'chirildi: " + title)
+    return redirect('dashboard-settings')
 
 
 # ---------------------------------------------------------------- Hisob

@@ -76,6 +76,16 @@
         </div>
 
         <div class="form-row">
+          <label for="{{ form.stock.id_for_label }}">Qoldiq (dona)</label>
+          {{ form.stock }}
+          {% for error in form.stock.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          <span class="help">
+            Bo'sh qoldirilsa — cheksiz. Har yutuqda 1 taga kamayadi, 0 bo'lganda sovg'a barabandan
+            avtomatik chiqadi.{% if prize and prize.stock is not None %} Hozir: <b>{{ prize.stock }}</b> dona.{% endif %}
+          </span>
+        </div>
+
+        <div class="form-row">
           <label>Holati</label>
           <div class="check-row" style="padding-top:.45rem">
             {{ form.is_active }}

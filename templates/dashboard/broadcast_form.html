@@ -1,0 +1,102 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Yangi xabar{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h2>Yangi xabar</h2>
+    <p class="sub">Bot orqali tanlangan foydalanuvchilarga yuboriladi</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'dashboard-broadcasts' %}" class="btn">← Ro'yxatga qaytish</a>
+  </div>
+</div>
+
+<form method="post" novalidate id="broadcast-form">
+  {% csrf_token %}
+
+  <div class="grid-2">
+
+    <div class="panel">
+      <div class="panel-title">Xabar</div>
+
+      <div class="form-row">
+        <label for="{{ form.text.id_for_label }}">Matn *</label>
+        {{ form.text }}
+        {% for error in form.text.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        <span class="help">
+          Oddiy matn sifatida yuboriladi (formatlashsiz). Emoji ishlatish mumkin.
+          <span id="text-counter">0</span> / 4000 belgi.
+        </span>
+      </div>
+
+      <div class="form-row" style="margin-top:1rem">
+        <div class="check-row">
+          {{ form.with_button }}
+          <label for="{{ form.with_button.id_for_label }}">Xabar ostiga «🎰 Ochish» tugmasini qo'shish</label>
+        </div>
+        <span class="help">Tugma MiniApp'ni to'g'ridan-to'g'ri ochadi.</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">
+        <span>Kimlarga</span>
+        <span class="hint">botni bloklaganlar hisobga olinmagan</span>
+      </div>
+
+      <div class="choice-list" role="radiogroup">
+        {% for opt in audience_options %}
+          <label class="choice">
+            <input type="radio" name="audience" value="{{ opt.value }}" data-count="{{ opt.count }}"
+                   {% if opt.value == selected_audience %}checked{% endif %}>
+            <span class="choice-label">{{ opt.label }}</span>
+            <span class="choice-count">{{ opt.count }}</span>
+          </label>
+        {% endfor %}
+      </div>
+      {% for error in form.audience.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+
+      <button type="submit" class="btn btn-primary btn-block" style="margin-top:1.2rem">
+        <svg class="ic"><use href="#ic-send"/></svg>
+        <span id="submit-label">Yuborish</span>
+      </button>
+    </div>
+
+  </div>
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    'use strict';
+    var form = document.getElementById('broadcast-form');
+    var text = form.querySelector('textarea[name="text"]');
+    var counter = document.getElementById('text-counter');
+    var label = document.getElementById('submit-label');
+
+    function selected() { return form.querySelector('input[name="audience"]:checked'); }
+
+    function refresh() {
+      counter.textContent = text.value.length;
+      var radio = selected();
+      label.textContent = radio ? 'Yuborish — ' + radio.dataset.count + ' kishiga' : 'Yuborish';
+    }
+
+    text.addEventListener('input', refresh);
+    form.addEventListener('change', refresh);
+    form.addEventListener('submit', function (e) {
+      var radio = selected();
+      var n = radio ? radio.dataset.count : '0';
+      if (!confirm('Xabar ' + n + ' ta foydalanuvchiga yuboriladi. Davom etasizmi?')) {
+        e.preventDefault();
+      }
+    });
+    refresh();
+  })();
+</script>
+{% endblock %}

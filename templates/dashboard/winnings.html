@@ -156,7 +156,7 @@
                 {{ w.expires_at|date:"d.m.Y H:i" }}
                 {% if w.used_at %}
                   <div style="color:var(--success);font-size:.75rem">
-                    Berilgan: {{ w.used_at|date:"d.m H:i" }}
+                    Berilgan: {{ w.used_at|date:"d.m H:i" }}{% if w.used_by %} · {{ w.used_by.get_username }}{% endif %}
                   </div>
                 {% endif %}
               </td>

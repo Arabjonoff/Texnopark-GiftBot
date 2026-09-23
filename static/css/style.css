@@ -1229,3 +1229,151 @@ body.tg-main-button #btn-submit-lead { display: none; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ------------------------------------------------------------ Aksiya banneri */
+
+.notice-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-lg);
+  background: rgba(245, 176, 20, 0.1);
+  border: 1px solid rgba(245, 176, 20, 0.35);
+  color: #fde68a;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.notice-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: rgba(245, 176, 20, 0.18);
+  color: var(--warning);
+}
+
+/* ------------------------------------------------------------ Majburiy obuna */
+
+.subscribe-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.1rem;
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(42, 171, 238, 0.18), transparent 60%),
+    var(--surface);
+  border: 1px solid rgba(42, 171, 238, 0.35);
+  box-shadow: var(--shadow);
+  animation: pop-in 0.35s var(--ease-out);
+}
+
+.subscribe-head { display: flex; gap: 0.8rem; align-items: flex-start; }
+
+.subscribe-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--telegram), #1d7fd1);
+}
+
+.subscribe-head h3 { font-size: 1.02rem; font-weight: 800; }
+.subscribe-head p { font-size: 0.8rem; color: var(--text-2); line-height: 1.4; margin-top: 0.15rem; }
+
+.subscribe-channels { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.channel-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0.6rem 0.6rem 0.85rem;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+}
+
+.channel-row.is-joined { border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.07); }
+
+.channel-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channel-status { color: var(--success); display: inline-flex; }
+.channel-row .btn { min-height: 38px; padding: 0.45rem 0.85rem; font-size: 0.82rem; flex: none; }
+
+/* ------------------------------------------------------------ Kunlik bonus */
+
+.bonus-card {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 120% at 0% 50%, rgba(16, 185, 129, 0.16), transparent 60%),
+    var(--surface);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.bonus-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--success), var(--success-2));
+}
+
+.bonus-body { flex: 1; min-width: 0; }
+.bonus-body h3 { font-size: 0.95rem; font-weight: 800; }
+.bonus-body p { font-size: 0.76rem; color: var(--text-2); margin-top: 0.1rem; }
+.bonus-card .btn { min-height: 40px; padding: 0.5rem 1rem; }
+
+/* ------------------------------------------------------------ Segmentli tanlov */
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.segmented-item {
+  min-height: 38px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: background 0.2s, color 0.2s;
+}
+
+.segmented-item.active { background: var(--accent-soft); color: var(--accent-text); }
+
+.referrer-count {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--accent-text);
+}
